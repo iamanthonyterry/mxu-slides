@@ -58,6 +58,13 @@ public final class SceneTransitionEngine: @unchecked Sendable {
         state = Locked(State(target: initial, active: nil))
     }
 
+    public func isSettled(at date: Date = Date()) -> Bool {
+        state.withLock { s in
+            guard let active = s.active else { return true }
+            return date.timeIntervalSince(active.startedAt) >= active.duration
+        }
+    }
+
     public func heldMediaIDs(at date: Date = Date()) -> Set<String> {
         state.withLock { s in
             guard let active = s.active,

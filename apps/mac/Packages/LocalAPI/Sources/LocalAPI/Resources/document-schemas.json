@@ -1112,6 +1112,58 @@
         "mediaId"
       ]
     },
+    "ScreenObjectOverride": {
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "rotationDegrees": {
+          "type": "number"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "objectId"
+      ]
+    },
+    "ScreenVariant": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "background": {
+          "$ref": "#/components/schemas/CueMedia"
+        },
+        "hidesBackground": {
+          "type": "boolean"
+        },
+        "objectOverrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ScreenObjectOverride"
+          }
+        }
+      },
+      "required": [
+        "targetId"
+      ]
+    },
     "Slide": {
       "type": "object",
       "properties": {
@@ -1188,6 +1240,12 @@
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/SlideVersion"
+          }
+        },
+        "screenVariants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ScreenVariant"
           }
         }
       },

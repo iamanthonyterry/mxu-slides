@@ -169,7 +169,27 @@ struct SlideObjectInspector: View {
                 }
             }
         }
-        InspectorSection("Background") {
+        InspectorSection(model.activeScreenName.map { "Background on \($0)" } ?? "Background") {
+            if model.activeScreen != nil {
+                switch model.screenBackground {
+                case .shared:
+                    Text("This screen shows the shared background. Choose or remove one here to give it its own.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .own, .hidden:
+                    HStack {
+                        Text(model.screenBackground == .hidden
+                             ? "This screen shows no background on this slide."
+                             : "This screen has its own background.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if model.screenBackgroundIsOwnToThisSlide {
+                            Button("Use Shared") { model.useSharedBackground() }
+                        }
+                    }
+                }
+            }
             if let background = model.effectiveBackground {
 
                 LabeledContent("Media") {
@@ -178,9 +198,11 @@ struct SlideObjectInspector: View {
                         editMediaButton(background.mediaId)
                     }
                 }
-                InspectorPicker("Applies To", selection: backgroundScopeBinding()) {
-                    ForEach(model.availableBackgroundScopes, id: \.self) { scope in
-                        Text(scope.rawValue).tag(scope)
+                if model.activeScreen == nil || model.screenBackground == .shared {
+                    InspectorPicker("Applies To", selection: backgroundScopeBinding()) {
+                        ForEach(model.availableBackgroundScopes, id: \.self) { scope in
+                            Text(scope.rawValue).tag(scope)
+                        }
                     }
                 }
 

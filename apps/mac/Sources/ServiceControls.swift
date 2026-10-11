@@ -1535,7 +1535,21 @@ final class ServiceControls {
             )
             .applyingMediaEffects { appModel.mediaSceneEffects(id: $0) }
         }
-        render.setLiveScenes(base, variants: variants)
+        var screens: [String: RenderScene] = [:]
+        let screenTargets = state.liveScreenTargets
+            .union(render.liveScreenTargets)
+            .union(render.screenTargets(shapedUnlike: base.canvasSize))
+        for target in screenTargets {
+            screens[target] = state.scene(
+                alertVisible: alertVisible,
+                linkedText: render.confidenceInfo,
+                slideThemeOverride: screenLooks[target].flatMap { slideThemeOverrides[$0] },
+                screen: target, at: now
+            )
+            .fitted(toScreen: render.screenSize(target))
+            .applyingMediaEffects { appModel.mediaSceneEffects(id: $0) }
+        }
+        render.setLiveScenes(base, variants: variants, screens: screens, screenLooks: screenLooks)
         syncMedia()
         syncLinkedTextClock()
         syncExitSweep()
@@ -1545,8 +1559,11 @@ final class ServiceControls {
 
     private var slideThemeOverrides: [String: Theme] = [:]
 
-    func setSlideThemeOverrides(_ overrides: [String: Theme]) {
-        guard overrides != slideThemeOverrides else { return }
+    private var screenLooks: [String: String] = [:]
+
+    func setSlideThemeOverrides(_ overrides: [String: Theme], screenLooks looks: [String: String] = [:]) {
+        guard overrides != slideThemeOverrides || looks != screenLooks else { return }
+        screenLooks = looks
         slideThemeOverrides = overrides
 
         state.slideThemeOverrides = overrides.sorted { $0.key < $1.key }.map(\.value)

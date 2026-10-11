@@ -377,7 +377,8 @@ public enum SlideSceneBuilder {
         canvasSize explicitCanvas: CGSize? = nil,
         animationContext: AnimationContext? = nil,
         pageTurn: Paging.Turn = .cut,
-        carriedMedia: [LayerKind: String] = [:]
+        carriedMedia: [LayerKind: String] = [:],
+        screen targetId: String? = nil
     ) -> RenderScene {
 
         let canvasSize = explicitCanvas ?? Self.canvasSize(for: presentation)
@@ -385,9 +386,10 @@ public enum SlideSceneBuilder {
         if let theme, let background = ColorHex.color(theme.backgroundColorHex) {
             scene.background = background
         }
-        let background = effectiveBackground(
-            slide: slide, presentation: presentation, arrangementId: arrangementId
+        let background = ScreenVariants.effectiveBackground(
+            for: slide, presentation: presentation, arrangementId: arrangementId, screen: targetId
         )
+        let slide = slide.rendered(onScreen: targetId)
         if let background {
             scene.addItem(
                 RenderItem(

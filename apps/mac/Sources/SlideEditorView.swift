@@ -144,6 +144,10 @@ struct SlideEditorView: View {
                     .frame(height: ShellView.headerHeight - CornerStandard.panelInset)
                 editorToolbar(model)
                 Divider()
+                if model.screenChoices.count > 1 || model.activeScreen != nil {
+                    screenBar(model)
+                    Divider()
+                }
                 canvas(model)
 
                 if model.editorMode == .design, model.compositionHasAnimationSteps {
@@ -1334,6 +1338,62 @@ struct SlideEditorView: View {
         .fixedSize()
     }
 
+    private func screenBar(_ model: SlideEditorModel) -> some View {
+        let selection = model.selectedObjectIDs
+        let overridden = selection.filter { model.hasScreenOverride($0) && !model.isOnlyOnActiveScreen($0) }
+        let onlyHere = selection.filter { model.isOnlyOnActiveScreen($0) }
+        return HStack(spacing: 10) {
+            Picker("Screen", selection: Binding(
+                get: { model.activeScreen ?? "" },
+                set: { model.editingScreen = $0.isEmpty ? nil : $0 }
+            )) {
+                Text("All Screens").tag("")
+                ForEach(model.screenChoices) { screen in
+                    Text(model.screenHasEdits(screen.id) ? "\(screen.name) •" : screen.name).tag(screen.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("All Screens edits the slide everywhere. Pick a screen to place, hide or add things on that screen only; a dot marks screens with their own version of this slide")
+
+            if let name = model.activeScreenName {
+                if let size = model.activeScreenResolution {
+                    Text("\(Int(size.width)) × \(Int(size.height))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .help("\(name)'s resolution. The canvas takes this screen's shape, with the shared slide centred in it")
+                }
+                Text("Placement and images here are for \(name) only. Words and styling stay shared.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 8)
+                if !onlyHere.isEmpty {
+                    Button("Show on All Screens") { model.showOnAllScreens(onlyHere) }
+                        .help("Send the selected object to every screen")
+                } else if !selection.isEmpty {
+                    Button("Only on This Screen") { model.showOnlyOnActiveScreen(selection) }
+                        .help("Hide the selected object on every other screen")
+                }
+                if !overridden.isEmpty {
+                    Button("Reset to Shared") { model.resetToShared(overridden) }
+                        .help("Return the selected object to its placement on All Screens")
+                }
+                if let screen = model.activeScreen, model.screenHasEdits(screen) {
+                    Button("Reset Screen") { model.resetScreenToShared() }
+                        .help("Remove everything that is \(name)'s own on this slide")
+                }
+            } else {
+                Spacer(minLength: 8)
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+    }
+
     private func modePicker(_ model: SlideEditorModel) -> some View {
         Picker("", selection: Binding(
             get: { model.editorMode },
@@ -1360,14 +1420,14 @@ struct SlideEditorView: View {
                 ZStack {
 
                     TransparencyGrid(square: 12)
-                        .aspectRatio(model.canvasSize, contentMode: .fit)
+                        .aspectRatio(model.viewCanvasSize, contentMode: .fit)
                         .padding(EditorGeometry.pasteboardInset)
                     SceneCanvas(render: render, transparentBackground: true, inset: EditorGeometry.pasteboardInset)
                     EditorInteractionView(model: model)
 
                     if model.editorMode == .animate {
                         AnimateCanvasOverlay(model: model)
-                            .aspectRatio(model.canvasSize, contentMode: .fit)
+                            .aspectRatio(model.viewCanvasSize, contentMode: .fit)
                             .padding(EditorGeometry.pasteboardInset)
                     }
                     if canvasDropTargeted {
@@ -1377,7 +1437,7 @@ struct SlideEditorView: View {
                                 Color(nsColor: .controlAccentColor).opacity(0.9),
                                 lineWidth: 2
                             )
-                            .aspectRatio(model.canvasSize, contentMode: .fit)
+                            .aspectRatio(model.viewCanvasSize, contentMode: .fit)
                             .padding(EditorGeometry.pasteboardInset)
                             .allowsHitTesting(false)
                     }
@@ -1395,14 +1455,17 @@ struct SlideEditorView: View {
                     delegate: CanvasDropDelegate(
                         enabled: true,
                         viewSize: { canvasViewSize },
-                        canvasSize: model.canvasSize,
+                        canvasSize: model.viewCanvasSize,
                         setTargeted: { canvasDropTargeted = $0 },
                         performText: { payload, point in
                             guard !payload.contains("::") else { return false }
-                            return model.dropMediaObject(mediaID: payload, at: point)
+                            let offset = model.viewCanvasOffset
+                            return model.dropMediaObject(
+                                mediaID: payload, at: CGPoint(x: point.x - offset.x, y: point.y - offset.y))
                         },
                         performFiles: { urls, point in
-                            model.dropFiles(urls, at: point)
+                            let offset = model.viewCanvasOffset
+                            model.dropFiles(urls, at: CGPoint(x: point.x - offset.x, y: point.y - offset.y))
                         }
                     )
                 )

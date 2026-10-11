@@ -1391,6 +1391,69 @@
         }
       ]
     },
+    "ScreenObjectOverride": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "objectId",
+          "type": "string"
+        },
+        {
+          "name": "x",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "y",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "width",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "height",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "rotationDegrees",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "hidden",
+          "type": "bool",
+          "optional": true
+        }
+      ]
+    },
+    "ScreenVariant": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "targetId",
+          "type": "string"
+        },
+        {
+          "name": "background",
+          "type": "CueMedia",
+          "optional": true
+        },
+        {
+          "name": "hidesBackground",
+          "type": "bool",
+          "optional": true
+        },
+        {
+          "name": "objectOverrides",
+          "type": "list:ScreenObjectOverride",
+          "optional": true
+        }
+      ]
+    },
     "Slide": {
       "kind": "record",
       "fields": [
@@ -1484,6 +1547,11 @@
         {
           "name": "history",
           "type": "list:SlideVersion",
+          "optional": true
+        },
+        {
+          "name": "screenVariants",
+          "type": "list:ScreenVariant",
           "optional": true
         }
       ]

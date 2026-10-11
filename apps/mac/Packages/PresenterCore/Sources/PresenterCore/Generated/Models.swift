@@ -749,6 +749,40 @@ public struct CueMedia: Codable, Sendable, Equatable {
     }
 }
 
+public struct ScreenObjectOverride: Codable, Sendable, Equatable {
+    public var objectId: String
+    public var x: Double?
+    public var y: Double?
+    public var width: Double?
+    public var height: Double?
+    public var rotationDegrees: Double?
+    public var hidden: Bool?
+
+    public init(objectId: String, x: Double? = nil, y: Double? = nil, width: Double? = nil, height: Double? = nil, rotationDegrees: Double? = nil, hidden: Bool? = nil) {
+        self.objectId = objectId
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.rotationDegrees = rotationDegrees
+        self.hidden = hidden
+    }
+}
+
+public struct ScreenVariant: Codable, Sendable, Equatable {
+    public var targetId: String
+    public var background: CueMedia?
+    public var hidesBackground: Bool?
+    public var objectOverrides: [ScreenObjectOverride]?
+
+    public init(targetId: String, background: CueMedia? = nil, hidesBackground: Bool? = nil, objectOverrides: [ScreenObjectOverride]? = nil) {
+        self.targetId = targetId
+        self.background = background
+        self.hidesBackground = hidesBackground
+        self.objectOverrides = objectOverrides
+    }
+}
+
 public struct Slide: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     public var name: String
@@ -769,8 +803,9 @@ public struct Slide: Codable, Sendable, Equatable, Identifiable {
     public var buildOrder: [String]?
     public var keepWords: Bool?
     public var history: [SlideVersion]?
+    public var screenVariants: [ScreenVariant]?
 
-    public init(id: String, name: String, objects: [SlideObject], background: CueMedia? = nil, backgroundFill: ObjectFill? = nil, sectionId: String? = nil, folder: String? = nil, themeSlideName: String? = nil, themeId: String? = nil, unthemed: Bool? = nil, overrideDesigns: [OverrideDesign]? = nil, actions: [SlideAction]? = nil, notes: String? = nil, autoAdvance: AutoAdvance? = nil, transition: Transition? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil, keepWords: Bool? = nil, history: [SlideVersion]? = nil) {
+    public init(id: String, name: String, objects: [SlideObject], background: CueMedia? = nil, backgroundFill: ObjectFill? = nil, sectionId: String? = nil, folder: String? = nil, themeSlideName: String? = nil, themeId: String? = nil, unthemed: Bool? = nil, overrideDesigns: [OverrideDesign]? = nil, actions: [SlideAction]? = nil, notes: String? = nil, autoAdvance: AutoAdvance? = nil, transition: Transition? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil, keepWords: Bool? = nil, history: [SlideVersion]? = nil, screenVariants: [ScreenVariant]? = nil) {
         self.id = id
         self.name = name
         self.objects = objects
@@ -790,6 +825,7 @@ public struct Slide: Codable, Sendable, Equatable, Identifiable {
         self.buildOrder = buildOrder
         self.keepWords = keepWords
         self.history = history
+        self.screenVariants = screenVariants
     }
 }
 

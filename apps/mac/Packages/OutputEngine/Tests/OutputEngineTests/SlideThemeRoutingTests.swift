@@ -38,6 +38,27 @@ final class SlideThemeRoutingTests: XCTestCase {
                        "clearing the routing returns the output to the base scene")
     }
 
+    func testAScreensOwnVariantWinsOverItsThemeAndFallsBackWithoutOne() throws {
+        let outputs = try makeManager()
+        let sideWall = UUID().uuidString
+        let centerWall = UUID().uuidString
+        outputs.sceneProvider = { taggedScene(100) }
+        outputs.variantSceneProvider = { _ in taggedScene(200) }
+        outputs.screenVariantSceneProvider = { targetID in
+            targetID == sideWall ? taggedScene(300) : nil
+        }
+        outputs.setSlideThemeRouting([sideWall: "walls", centerWall: "walls"])
+        outputs.setLayerRouting([sideWall: [LayerKind.slide.rawValue]])
+
+        let side = outputs.previewProvider(for: sideWall)()
+        XCTAssertEqual(side.canvasSize.width, 300, "the side wall composites its own version of the slide")
+        XCTAssertTrue(side.layers.first { $0.kind == .alerts }?.isHidden ?? true,
+                      "layer routing still applies to a screen's own scene")
+        XCTAssertEqual(outputs.previewProvider(for: centerWall)().canvasSize.width, 200,
+                       "a screen without its own version keeps its theme look")
+        XCTAssertEqual(outputs.previewProvider(for: UUID().uuidString)().canvasSize.width, 100)
+    }
+
     func testMissingVariantFallsBackToBaseNeverBlank() throws {
         let outputs = try makeManager()
         let stream = UUID().uuidString

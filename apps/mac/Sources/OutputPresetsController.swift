@@ -173,7 +173,7 @@ final class OutputPresetsController {
             themeRouting[assignment.targetId] = key
         }
         outputs.setSlideThemeRouting(themeRouting)
-        controls?.setSlideThemeOverrides(overrides)
+        controls?.setSlideThemeOverrides(overrides, screenLooks: themeRouting)
         applyMaskActivation(preset)
     }
 

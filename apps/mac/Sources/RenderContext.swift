@@ -26,6 +26,33 @@ final class RenderContext {
 
     private let variantEngines = Locked<[String: SceneTransitionEngine]>([:])
 
+    private let screenEngines = Locked<[String: SceneTransitionEngine]>([:])
+
+    private var lastVariantScenes: [String: RenderScene] = [:]
+
+    private var lastScreenScenes: [String: RenderScene] = [:]
+
+    var liveScreenTargets: Set<String> { Set(screenEngines.value.keys) }
+
+    func screenTargets(shapedUnlike deck: CGSize) -> Set<String> {
+        var targets = Set<String>()
+        for screen in outputs.placeholderScreens where outputs.role(forScreen: screen.id) == .audience {
+            let size = CGSize(width: screen.width, height: screen.height)
+            if !ScreenCanvas(deck: deck, screen: size).isDeck { targets.insert(screen.id.uuidString) }
+        }
+        for display in outputs.displays where outputs.assignedDisplays.contains(display.uuid) {
+            if !ScreenCanvas(deck: deck, screen: display.frame.size).isDeck { targets.insert(display.uuid) }
+        }
+        return targets
+    }
+
+    func screenSize(_ target: String) -> CGSize? {
+        if let id = UUID(uuidString: target), let screen = outputs.placeholderScreens.first(where: { $0.id == id }) {
+            return CGSize(width: screen.width, height: screen.height)
+        }
+        return outputs.displays.first { $0.uuid == target }?.frame.size
+    }
+
     let confidenceBox: Locked<ConfidenceInfo>
 
     let confidenceLayoutsBox: Locked<[UUID: ConfidenceLayout]>
@@ -100,8 +127,44 @@ final class RenderContext {
         }
     }
 
-    func setLiveScenes(_ scene: RenderScene, variants: [String: RenderScene]) {
+    func setLiveScenes(
+        _ scene: RenderScene, variants: [String: RenderScene],
+        screens: [String: RenderScene] = [:], screenLooks: [String: String] = [:]
+    ) {
         let stash = nextLiveTransitions
+        let previousBase = liveScene
+        let previousVariants = lastVariantScenes
+        let previousScreens = lastScreenScenes
+        screenEngines.withLock { engines in
+            for key in engines.keys where screens[key] == nil {
+                engines.removeValue(forKey: key)
+            }
+            for (target, screenScene) in screens {
+                let look = screenLooks[target]
+                let shared = look.flatMap { variants[$0] } ?? scene
+                let sharedBefore = look.flatMap { previousVariants[$0] } ?? previousBase
+                guard let engine = engines[target] else {
+
+                    guard screenScene != shared else { continue }
+                    let engine = SceneTransitionEngine(initial: sharedBefore)
+                    engines[target] = engine
+                    engine.push(screenScene) { layer in
+                        stash[layer] ?? Self.roomDefault(for: layer)
+                    }
+                    continue
+                }
+
+                if screenScene == shared, previousScreens[target] == sharedBefore, engine.isSettled() {
+                    engines.removeValue(forKey: target)
+                    continue
+                }
+                engine.push(screenScene) { layer in
+                    stash[layer] ?? Self.roomDefault(for: layer)
+                }
+            }
+        }
+        lastVariantScenes = variants
+        lastScreenScenes = screens
         variantEngines.withLock { engines in
             for key in engines.keys where variants[key] == nil {
                 engines.removeValue(forKey: key)
@@ -118,7 +181,7 @@ final class RenderContext {
     }
 
     func heldVariantMediaIDs(at date: Date = Date()) -> Set<String> {
-        variantEngines.value.values.reduce(into: Set<String>()) {
+        (Array(variantEngines.value.values) + Array(screenEngines.value.values)).reduce(into: Set<String>()) {
             $0.formUnion($1.heldMediaIDs(at: date))
         }
     }
@@ -168,6 +231,13 @@ final class RenderContext {
 
         outputs.variantSceneProvider = { [variantEngines, confidenceBox] themeID in
             guard let engine = variantEngines.value[themeID] else { return nil }
+            let now = Date()
+            return VisibilityRules.filteredScene(
+                engine.scene(at: now), info: confidenceBox.value, at: now
+            )
+        }
+        outputs.screenVariantSceneProvider = { [screenEngines, confidenceBox] targetID in
+            guard let engine = screenEngines.value[targetID] else { return nil }
             let now = Date()
             return VisibilityRules.filteredScene(
                 engine.scene(at: now), info: confidenceBox.value, at: now
