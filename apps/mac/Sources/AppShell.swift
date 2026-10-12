@@ -278,6 +278,7 @@ struct ShellView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.confidenceMonitor) private var confidenceMonitor
+    @Environment(\.timecode) private var timecode
 
     @State private var pinFlow: PinFlow?
 
@@ -345,6 +346,7 @@ struct ShellView: View {
     @AppStorage(SlidesAcross.key) private var slidesAcross = SlidesAcross.fallback
 
     @AppStorage("diagnostics.performanceHUD") private var performanceHUD = false
+    @AppStorage("present.timecodeStrip") private var timecodeStrip = true
     @AppStorage("shell.sidebarVisible") private var sidebarVisible = true
     @AppStorage("shell.sidebarSplit") private var splitFraction = 0.42
     @AppStorage("shell.sidebarWidth") private var sidebarWidth = 272.0
@@ -1405,6 +1407,9 @@ struct ShellView: View {
             }
 
             if mode == .present, !editorTakesOver {
+                if timecodeStrip, let timecode, timecode.enabled {
+                    TimecodeLiveStrip(model: model, timecode: timecode)
+                }
                 presentFooter
             }
         }
@@ -1500,6 +1505,8 @@ struct ShellView: View {
             Toggle("Backgrounds Only on Declaring Slide", isOn: $hideScopedBackgrounds)
             Toggle("Transparency Grid", isOn: $transparencyGrid)
             Divider()
+            Toggle("Timecode Timeline", isOn: $timecodeStrip)
+                .help("The live timeline strip under the slides while timecode is on")
             Toggle("Performance HUD", isOn: $performanceHUD)
         }
 

@@ -143,6 +143,40 @@ final class TimecodeController {
     /// during a record pass so the old cues don't fire over the new taps.
     var suppressFiring = false
 
+    /// Operator hold: timecode keeps being followed (the strip keeps moving) but
+    /// nothing fires. Releasing resumes at the next cue — it doesn't yank the
+    /// show back to wherever the timeline thinks it should be.
+    private(set) var held = false
+
+    /// The songs being followed, sorted by offset, and their slide labels.
+    private(set) var timelines: [ChaseTimeline] = []
+    private(set) var slideLabels: [String: [String: String]] = [:]
+
+    /// The cue the timeline is on (presentation + index), fired or held.
+    var activeCue: (presentationID: String, cueIndex: Int)? { chase.active }
+
+    func setHold(_ on: Bool) {
+        held = on
+        DiagnosticsStore.shared.note("timecode.hold", detail: on ? "on" : "off")
+    }
+
+    /// The followed song whose window contains a timecode label.
+    func song(containing label: Double) -> ChaseTimeline? {
+        chase.timeline(containing: label)
+    }
+
+    /// Fires the current cue again (after a manual takeover).
+    func syncNow() {
+        held = false
+        resync()
+    }
+
+    /// Operator-fired cue from the live strip.
+    func fireManually(presentationID: String, slideID: String, occurrence: Int) {
+        DiagnosticsStore.shared.note("timecode.manual", detail: slideID)
+        Task { await bridge.fireTimelineCue(presentationID: presentationID, slideID: slideID, occurrence: occurrence) }
+    }
+
     /// The timecode label right now, extrapolated between frames for a smooth
     /// playhead. Nil unless timecode is actually running.
     func livePosition(at now: Double = CACurrentMediaTime()) -> Double? {
@@ -236,9 +270,21 @@ final class TimecodeController {
         }
         songNames = names
         followedSongCount = timelines.count
+        var labels: [String: [String: String]] = [:]
+        for deck in found.decks {
+            let sections = Dictionary(
+                (deck.sections ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            var map: [String: String] = [:]
+            for slide in deck.slides {
+                map[slide.id] = TimelineEditorSheet.slideLabel(slide, section: slide.sectionId.flatMap { sections[$0] })
+            }
+            labels[deck.id] = map
+        }
+        if labels != slideLabels { slideLabels = labels }
         let ordered = TimecodeChase.ordered(timelines)
         if ordered != chase.timelines {
             chase.timelines = ordered
+            self.timelines = ordered
             chase.resync()
         }
     }
@@ -275,7 +321,7 @@ final class TimecodeController {
             switch event {
             case .fire(let presentationID, let slideID, _, let occurrence):
                 activeSongName = songNames[presentationID]
-                if suppressFiring { continue }
+                if suppressFiring || held { continue }
                 DiagnosticsStore.shared.note("timecode.fire", detail: "\(timecode?.description ?? "") \(slideID)")
                 Task { await bridge.fireTimelineCue(
                     presentationID: presentationID, slideID: slideID, occurrence: occurrence) }
