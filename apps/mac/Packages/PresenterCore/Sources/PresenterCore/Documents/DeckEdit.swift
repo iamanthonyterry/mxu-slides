@@ -236,6 +236,7 @@ struct DeckField {
             optional(\.autoAdvance, "autoAdvance"),
             optional(\.displayKey, "displayKey"),
             optional(\.origin, "origin"),
+            optional(\.timeline, "timeline"),
         ]
     }
 }

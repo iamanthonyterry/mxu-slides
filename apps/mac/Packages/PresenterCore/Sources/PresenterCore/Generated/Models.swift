@@ -843,6 +843,32 @@ public struct AutoAdvance: Codable, Sendable, Equatable {
     }
 }
 
+public struct TimelineCue: Codable, Sendable, Equatable {
+    public var slideId: String
+    public var timeSeconds: Double
+    public var name: String?
+
+    public init(slideId: String, timeSeconds: Double, name: String? = nil) {
+        self.slideId = slideId
+        self.timeSeconds = timeSeconds
+        self.name = name
+    }
+}
+
+public struct PresentationTimeline: Codable, Sendable, Equatable {
+    public var timecodeEnabled: Bool
+    public var offsetSeconds: Double
+    public var cues: [TimelineCue]
+    public var durationSeconds: Double?
+
+    public init(timecodeEnabled: Bool, offsetSeconds: Double, cues: [TimelineCue], durationSeconds: Double? = nil) {
+        self.timecodeEnabled = timecodeEnabled
+        self.offsetSeconds = offsetSeconds
+        self.cues = cues
+        self.durationSeconds = durationSeconds
+    }
+}
+
 public struct PresentationSection: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     public var name: String
@@ -940,8 +966,9 @@ public struct Presentation: Codable, Sendable, Equatable, Identifiable {
     public var autoAdvance: AutoAdvance?
     public var displayKey: String?
     public var origin: PresentationOrigin?
+    public var timeline: PresentationTimeline?
 
-    public init(id: String, name: String, presentationKind: PresentationKind, themeId: String, folder: String? = nil, folderId: String? = nil, slides: [Slide], canvasWidth: Int? = nil, canvasHeight: Int? = nil, background: CueMedia? = nil, backgroundFill: ObjectFill? = nil, sections: [PresentationSection]? = nil, arrangements: [Arrangement]? = nil, defaultArrangementId: String? = nil, reflowSource: String? = nil, ccli: CCLIInfo? = nil, chordProSource: String? = nil, musicKey: String? = nil, autoAdvance: AutoAdvance? = nil, displayKey: String? = nil, origin: PresentationOrigin? = nil) {
+    public init(id: String, name: String, presentationKind: PresentationKind, themeId: String, folder: String? = nil, folderId: String? = nil, slides: [Slide], canvasWidth: Int? = nil, canvasHeight: Int? = nil, background: CueMedia? = nil, backgroundFill: ObjectFill? = nil, sections: [PresentationSection]? = nil, arrangements: [Arrangement]? = nil, defaultArrangementId: String? = nil, reflowSource: String? = nil, ccli: CCLIInfo? = nil, chordProSource: String? = nil, musicKey: String? = nil, autoAdvance: AutoAdvance? = nil, displayKey: String? = nil, origin: PresentationOrigin? = nil, timeline: PresentationTimeline? = nil) {
         self.id = id
         self.name = name
         self.presentationKind = presentationKind
@@ -963,6 +990,7 @@ public struct Presentation: Codable, Sendable, Equatable, Identifiable {
         self.autoAdvance = autoAdvance
         self.displayKey = displayKey
         self.origin = origin
+        self.timeline = timeline
     }
 }
 

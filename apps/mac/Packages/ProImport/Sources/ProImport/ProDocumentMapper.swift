@@ -144,6 +144,10 @@ public enum ProDocumentMapper {
             presentation.autoAdvance = AutoAdvance(delaySeconds: duration, loopToStart: true)
         }
 
+        let timeline = ProTimelineMapper.map(doc, slideIDs: Set(slides.map(\.id)))
+        presentation.timeline = timeline.timeline
+        for warning in timeline.warnings { state.warn(warning) }
+
         if doc.hasBackground, doc.background.isEnabled {
             switch doc.background.fill {
             case .color(let color)?:

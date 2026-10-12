@@ -40,6 +40,8 @@ packages:
     path: Packages/StreamEngine
   DeckLinkKit:
     path: Packages/DeckLinkKit
+  TimecodeKit:
+    path: Packages/TimecodeKit
 
 targets:
   MxUSlides:
@@ -65,6 +67,7 @@ targets:
       - package: LocalAPI
       - package: ProImport
       - package: PPTXImport
+      - package: TimecodeKit
       - package: StreamEngine
       - package: NDIKit
       - target: NDIHelper

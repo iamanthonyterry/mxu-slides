@@ -90,6 +90,8 @@ struct MxUSlidesApp: App {
 
     @State private var keyIn: KeyInController?
 
+    @State private var timecode: TimecodeController?
+
     @State private var signage: SignageController?
 
     @State private var mediaPlaylists: MediaPlaylistController?
@@ -183,6 +185,10 @@ struct MxUSlidesApp: App {
             )
             keyIn.attach()
             _keyIn = State(initialValue: keyIn)
+
+            let timecodeController = TimecodeController(bridge: api.bridge)
+            timecodeController.attach()
+            _timecode = State(initialValue: timecodeController)
             let tracking = ServiceTimingController(model: model, controls: controls, render: render)
             controls.serviceTracking = tracking
             _serviceTracking = State(initialValue: tracking)
@@ -267,7 +273,7 @@ struct MxUSlidesApp: App {
             } else {
                 AppSettingsView(
                     model: appModel, controls: controls, layout: presentLayout,
-                    api: localAPI, ink: ink)
+                    api: localAPI, ink: ink, timecode: timecode)
             }
         }
 

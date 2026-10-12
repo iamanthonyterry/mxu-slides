@@ -1593,4 +1593,51 @@ struct ProDocumentMapperTests {
             #expect(byID[id]?.edge == nil && byID[id]?.offsetX == 1832, "outs share the rigid vector too")
         }
     }
+
+    private func timelineCue(_ cueID: String, at seconds: Double) -> RVData_Presentation.Timeline.Cue {
+        var cue = RVData_Presentation.Timeline.Cue()
+        cue.triggerTime = seconds
+        cue.cueID = uuid(cueID)
+        return cue
+    }
+
+    @Test func timelineImportsSlideCuesAndTimecodeOffset() {
+        var doc = songDocument()
+        doc.timeline.timecodeEnable = true
+        doc.timeline.timecodeOffset = 7_200
+        doc.timeline.duration = 245
+        doc.timeline.cuesV2 = [
+            timelineCue("CUE-C1", at: 61.5),
+            timelineCue("CUE-V1", at: 4),
+            timelineCue("CUE-V2", at: 12.25),
+        ]
+        var actionCue = RVData_Presentation.Timeline.Cue()
+        actionCue.triggerTime = 30
+        actionCue.action = RVData_Action()
+        doc.timeline.cuesV2.append(actionCue)
+        doc.timeline.cuesV2.append(timelineCue("CUE-GONE", at: 90))
+
+        let mapped = ProDocumentMapper.map(doc, fallbackName: "Song")
+        let timeline = mapped.presentation.timeline
+        #expect(timeline?.timecodeEnabled == true)
+        #expect(timeline?.offsetSeconds == 7_200, "02:00:00:00 is song two in the hour-per-song layout")
+        #expect(timeline?.durationSeconds == 245)
+        #expect(timeline?.cues.map(\.slideId) == ["cue-v1", "cue-v2", "cue-c1"], "sorted, and ids match imported slide ids")
+        #expect(timeline?.cues.map(\.timeSeconds) == [4, 12.25, 61.5])
+        #expect(mapped.warnings.contains { $0.contains("action cue") })
+        #expect(mapped.warnings.contains { $0.contains("not in the presentation") })
+    }
+
+    @Test func legacyTimelineCuesAreUsedWhenV2IsEmpty() {
+        var doc = songDocument()
+        doc.timeline.cues = [timelineCue("CUE-V2", at: 8)]
+        let mapped = ProDocumentMapper.map(doc, fallbackName: "Song")
+        #expect(mapped.presentation.timeline?.cues.map(\.slideId) == ["cue-v2"])
+        #expect(mapped.presentation.timeline?.timecodeEnabled == false)
+    }
+
+    @Test func presentationWithoutTimelineStaysNil() {
+        let mapped = ProDocumentMapper.map(songDocument(), fallbackName: "Song")
+        #expect(mapped.presentation.timeline == nil)
+    }
 }

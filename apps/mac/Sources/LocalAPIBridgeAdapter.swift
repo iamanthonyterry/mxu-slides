@@ -289,6 +289,61 @@ final class AppAPIBridge: LocalAPIBridge {
         return APIOutputsStatus(screens: screens, presets: presets)
     }
 
+    // MARK: Timecode
+
+    /// The current service's name and the presentations in it whose timeline
+    /// follows timecode. Empty when no service is selected.
+    func timecodePresentations() async -> (serviceName: String?, decks: [Presentation]) {
+        guard let service = currentService() else { return (nil, []) }
+        let decks: [String: Presentation]
+        if let held = heldDecks(in: service) {
+            decks = held
+        } else {
+            decks = await filledDecks(in: service)
+        }
+        var seen = Set<String>()
+        let ordered = deckIDs(in: service).compactMap { id -> Presentation? in
+            guard seen.insert(id).inserted, let deck = decks[id],
+                  deck.timeline?.timecodeEnabled == true
+            else { return nil }
+            return deck
+        }
+        return (service.name, ordered)
+    }
+
+    /// Fires a timeline cue. Inside the current service the slide fires in its
+    /// service item, so the run of show follows along; `occurrence` picks which
+    /// repeat of the slide in the arrangement (the second chorus, etc.).
+    /// Otherwise it fires from the library, like `POST /v1/show/slide`.
+    func fireTimelineCue(presentationID: String, slideID: String, occurrence: Int) async {
+        if let service = currentService() {
+            let decks: [String: Presentation]
+            if let held = heldDecks(in: service) {
+                decks = held
+            } else {
+                decks = await filledDecks(in: service)
+            }
+            let matches = positions(in: service, decks: decks).filter {
+                $0.presentation.id == presentationID && $0.slide.id == slideID
+            }
+            if let itemID = matches.first?.itemID {
+                let inItem = matches.filter { $0.itemID == itemID }
+                let position = inItem[min(max(occurrence, 0), inItem.count - 1)]
+                controls.fire(
+                    slide: position.slide, in: position.presentation,
+                    arrangementId: position.arrangementId,
+                    contextID: position.itemID, occurrence: position.occurrence
+                )
+                return
+            }
+        }
+        do {
+            try await fireSlide(APIFireSlideCommand(presentationId: presentationID, slideId: slideID))
+        } catch {
+            DiagnosticsStore.shared.note("timecode.fire", detail: "\(error)")
+        }
+    }
+
     private struct FirePosition {
         var itemID: String
         var occurrence: Int

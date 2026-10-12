@@ -11,6 +11,7 @@ struct AppSettingsView: View {
     var api: LocalAPIController?
 
     var ink: InkController?
+    var timecode: TimecodeController?
 
     @State private var pinFlow: PinFlow?
 
@@ -399,6 +400,7 @@ struct AppSettingsView: View {
         ))
         rows.append(contentsOf: apiRows)
         rows.append(contentsOf: inkRows)
+        rows.append(contentsOf: timecodeRows)
         return rows
     }
 
@@ -503,6 +505,51 @@ struct AppSettingsView: View {
         ]
     }
 
+    private var timecodeRows: [SettingsRowSpec] {
+        guard let timecode else { return [] }
+        return [
+            SettingsRowSpec(
+                id: "timecode.enabled", category: .timecode,
+                title: "Follow timecode",
+                caption: "Fires timeline cues from incoming LTC — the same per-song timelines ProPresenter uses. Songs follow when they're in the current service and their timeline is set to timecode.",
+                keywords: "timecode ltc smpte ableton playback timeline cue auto advance lyrics chase sync propresenter",
+                control: AnyView(
+                    Toggle("", isOn: Binding(get: { timecode.enabled }, set: { timecode.enabled = $0 }))
+                        .settingsToggle()
+                )
+            ),
+            SettingsRowSpec(
+                id: "timecode.input", category: .timecode,
+                title: "Input",
+                caption: "The audio interface and channel carrying the LTC track.",
+                keywords: "timecode ltc audio input device interface channel",
+                control: AnyView(TimecodeInputPicker(timecode: timecode))
+            ),
+            SettingsRowSpec(
+                id: "timecode.early", category: .timecode,
+                title: "Fire early",
+                caption: "Frames to fire ahead of the timeline, to make up for projector or switcher delay.",
+                keywords: "timecode offset early latency delay frames",
+                control: AnyView(
+                    Stepper(
+                        "\(timecode.earlyFrames) fr",
+                        value: Binding(get: { timecode.earlyFrames }, set: { timecode.earlyFrames = $0 }),
+                        in: -10...10
+                    )
+                    .monospacedDigit()
+                    .fixedSize()
+                )
+            ),
+            SettingsRowSpec(
+                id: "timecode.status", category: .timecode,
+                title: "Status",
+                caption: nil,
+                keywords: "timecode status signal locked rate",
+                control: AnyView(TimecodeStatusView(timecode: timecode))
+            ),
+        ]
+    }
+
     private var audioRows: [SettingsRowSpec] {
         guard let audio = controls?.audio else { return [] }
         return [
@@ -562,6 +609,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case screens
     case streamRecord
     case api
+    case timecode
 
     var id: String { rawValue }
 
@@ -578,6 +626,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .streamRecord: "Stream & Record"
 
         case .api: "Network & API"
+        case .timecode: "Timecode"
         }
     }
 
@@ -593,6 +642,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .screens: "display"
         case .streamRecord: "record.circle"
         case .api: "network"
+        case .timecode: "timer"
         }
     }
 }
