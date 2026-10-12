@@ -226,18 +226,10 @@ extension Slide {
     public func freshIDCopy() -> Slide {
         var copy = self
         copy.id = UUID().uuidString
-        var renamed: [String: String] = [:]
-        copy.objects = copy.objects.map { original in
-            var object = original
+        copy.objects = copy.objects.map { object in
+            var object = object
             object.id = UUID().uuidString
-            renamed[original.id] = object.id
             return object
-        }
-        for variant in (copy.screenVariants ?? []).indices {
-            for index in (copy.screenVariants?[variant].objectOverrides ?? []).indices {
-                let old = copy.screenVariants![variant].objectOverrides![index].objectId
-                copy.screenVariants![variant].objectOverrides![index].objectId = renamed[old] ?? old
-            }
         }
         return copy
     }

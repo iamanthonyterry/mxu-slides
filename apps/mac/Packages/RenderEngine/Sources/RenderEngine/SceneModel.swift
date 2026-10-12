@@ -829,6 +829,16 @@ public struct RenderLayer: Identifiable, Equatable, Sendable {
         self.isHidden = isHidden
         self.items = items
     }
+
+    public init(id: String, kind: LayerKind, name: String, isHidden: Bool = false, items: [RenderItem] = []) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.isHidden = isHidden
+        self.items = items
+    }
+
+    public var isBuiltIn: Bool { id == kind.rawValue }
 }
 
 extension RenderScene {
@@ -899,12 +909,16 @@ public struct RenderScene: Equatable, Sendable {
     }
 
     public mutating func addItem(_ item: RenderItem, to kind: LayerKind) {
-        guard let index = layers.firstIndex(where: { $0.kind == kind }) else { return }
+        addItem(item, toLayer: kind.rawValue)
+    }
+
+    public mutating func addItem(_ item: RenderItem, toLayer id: String) {
+        guard let index = layers.firstIndex(where: { $0.id == id }) else { return }
         layers[index].items.append(item)
     }
 
     public mutating func setLayerHidden(_ hidden: Bool, kind: LayerKind) {
-        guard let index = layers.firstIndex(where: { $0.kind == kind }) else { return }
+        guard let index = layers.firstIndex(where: { $0.id == kind.rawValue }) else { return }
         layers[index].isHidden = hidden
     }
 

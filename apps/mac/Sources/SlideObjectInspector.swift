@@ -10,6 +10,7 @@ struct SlideObjectInspector: View {
     @FocusState private var textEditorFocused: Bool
     @State private var showingBackgroundPicker = false
     @State private var showingFillMediaPicker = false
+    @State private var showingLayerMediaPicker = false
 
     @State private var selectedLineIndex = 0
 
@@ -169,27 +170,7 @@ struct SlideObjectInspector: View {
                 }
             }
         }
-        InspectorSection(model.activeScreenName.map { "Background on \($0)" } ?? "Background") {
-            if model.activeScreen != nil {
-                switch model.screenBackground {
-                case .shared:
-                    Text("This screen shows the shared background. Choose or remove one here to give it its own.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .own, .hidden:
-                    HStack {
-                        Text(model.screenBackground == .hidden
-                             ? "This screen shows no background on this slide."
-                             : "This screen has its own background.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        if model.screenBackgroundIsOwnToThisSlide {
-                            Button("Use Shared") { model.useSharedBackground() }
-                        }
-                    }
-                }
-            }
+        InspectorSection("Background") {
             if let background = model.effectiveBackground {
 
                 LabeledContent("Media") {
@@ -198,11 +179,9 @@ struct SlideObjectInspector: View {
                         editMediaButton(background.mediaId)
                     }
                 }
-                if model.activeScreen == nil || model.screenBackground == .shared {
-                    InspectorPicker("Applies To", selection: backgroundScopeBinding()) {
-                        ForEach(model.availableBackgroundScopes, id: \.self) { scope in
-                            Text(scope.rawValue).tag(scope)
-                        }
+                InspectorPicker("Applies To", selection: backgroundScopeBinding()) {
+                    ForEach(model.availableBackgroundScopes, id: \.self) { scope in
+                        Text(scope.rawValue).tag(scope)
                     }
                 }
 
@@ -211,9 +190,9 @@ struct SlideObjectInspector: View {
                     Text("Background").tag(MediaClassification.background)
                 }
                 InspectorPicker("Layer", selection: backgroundLayerBinding(background)) {
-                    Text("Background Media").tag(CueMediaLayer.loopingVideos)
-                    Text("Still Graphics").tag(CueMediaLayer.stillGraphics)
-                    Text("Foreground Videos").tag(CueMediaLayer.videos)
+                    ForEach(model.layerChoices, id: \.id) { layer in
+                        Text(layer.name).tag(layer.id)
+                    }
                 }
                 Toggle("Loop", isOn: backgroundLoopBinding(background))
                 HStack {
@@ -227,6 +206,59 @@ struct SlideObjectInspector: View {
                     .foregroundStyle(.secondary)
                 Button("Choose…") { showingBackgroundPicker = true }
             }
+        }
+
+        InspectorSection("Layer Media") {
+            let cues = model.layerMedia
+            if cues.isEmpty {
+                Text("Stack videos and images on this slide and send each to its own layer. They start when the slide fires and keep playing on their layer until something replaces or clears it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(Array(cues.enumerated()), id: \.offset) { index, cue in
+                if index > 0 { Divider() }
+                LabeledContent("Media") {
+                    HStack(spacing: 6) {
+                        if let layer = model.appModel.layerStack.layer(model.layerID(of: cue)) {
+                            LayerMediaChip(model: model.appModel, cue: cue, layer: layer, width: 44)
+                        }
+                        Text(model.backgroundMediaName(cue))
+                            .lineLimit(1)
+                        editMediaButton(cue.mediaId)
+                    }
+                }
+                InspectorPicker("Layer", selection: Binding(
+                    get: { model.layerID(of: cue) },
+                    set: { id in model.updateLayerMedia(at: index) { $0.setLayer(id) } }
+                )) {
+                    ForEach(model.layerChoices, id: \.id) { layer in
+                        Text(layer.name).tag(layer.id)
+                    }
+                }
+                InspectorPicker("Plays", selection: Binding(
+                    get: { cue.mode ?? .untilReplaced },
+                    set: { mode in model.updateLayerMedia(at: index) { $0.mode = mode == .untilReplaced ? nil : mode } }
+                )) {
+                    Text("Until Replaced").tag(CueMediaMode.untilReplaced)
+                    Text("This Slide Only").tag(CueMediaMode.slideOnly)
+                }
+                if model.appModel.media(cue.mediaId)?.mediaKind == .video {
+                    Toggle("Loop", isOn: Binding(
+                        get: { cue.loops ?? true },
+                        set: { loops in model.updateLayerMedia(at: index) { $0.loops = loops } }
+                    ))
+                }
+                HStack {
+                    Spacer()
+                    Button("Remove", role: .destructive) { model.removeLayerMedia(at: index) }
+                }
+            }
+            Button("Add Media…") { showingLayerMediaPicker = true }
+                .sheet(isPresented: $showingLayerMediaPicker) {
+                    LibraryPickerSheet(appModel: model.appModel) { entry in
+                        model.addLayerMedia(mediaID: entry.id)
+                    }
+                }
         }
 
         InspectorSection("Auto Advance") {
@@ -403,10 +435,10 @@ struct SlideObjectInspector: View {
         )
     }
 
-    private func backgroundLayerBinding(_ background: CueMedia) -> Binding<CueMediaLayer> {
+    private func backgroundLayerBinding(_ background: CueMedia) -> Binding<String> {
         Binding(
-            get: { background.layer ?? .loopingVideos },
-            set: { layer in model.updateBackground { $0.layer = layer } }
+            get: { model.layerID(of: background) },
+            set: { id in model.updateBackground { $0.setLayer(id) } }
         )
     }
 

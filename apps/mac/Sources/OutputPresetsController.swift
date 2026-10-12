@@ -3,6 +3,7 @@ import Observation
 import OutputEngine
 import PresenterCore
 import RenderEngine
+import SlideScene
 
 @MainActor
 @Observable
@@ -30,6 +31,19 @@ final class OutputPresetsController {
         activePresetID = UserDefaults.standard.string(forKey: Self.activeKey)
         applyActivePreset()
         armThemeMutationWatch()
+        armLayerStackWatch()
+    }
+
+    private func armLayerStackWatch() {
+        withObservationTracking {
+            _ = appModel.layerStack
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.controls?.layersChanged()
+                self.armLayerStackWatch()
+            }
+        }
     }
 
     private func armThemeMutationWatch() {
@@ -124,6 +138,7 @@ final class OutputPresetsController {
             }
             outputs.setLayerRouting([:])
             outputs.setSlideThemeRouting([:])
+            controls?.setLayerSpans([:])
             controls?.setSlideThemeOverrides([:])
             applyMaskActivation(nil)
         }
@@ -139,6 +154,7 @@ final class OutputPresetsController {
             routing[assignment.targetId] = Set(assignment.enabledLayers)
         }
         outputs.setLayerRouting(routing)
+        controls?.setLayerSpans(LayerSpans.active(in: preset))
 
         var themeRouting: [String: String] = [:]
         var overrides: [String: Theme] = [:]
@@ -273,11 +289,13 @@ final class OutputPresetsController {
     func toggleLayer(
         presetID: String, targetKind: OutputTargetKind, targetId: String, layer: String
     ) {
+        let everyLayer = allLayerIDs
+        let screens = routableTargets
         guard write(presetID, { preset in
             var assignment = preset.assignments.first { $0.targetId == targetId }
                 ?? OutputAssignment(
                     targetKind: targetKind, targetId: targetId,
-                    enabledLayers: LayerKind.allCases.map(\.rawValue)
+                    enabledLayers: everyLayer
                 )
             var layers = Set(assignment.enabledLayers)
             if layers.contains(layer) { layers.remove(layer) } else { layers.insert(layer) }
@@ -285,6 +303,7 @@ final class OutputPresetsController {
             assignment.enabledLayers = layers.sorted()
             preset.assignments.removeAll { $0.targetId == targetId }
             preset.assignments.append(assignment)
+            preset.respan(layer: layer, across: screens)
         }) else { return }
         if presetID == activePresetID { applyActivePreset() }
     }
@@ -301,11 +320,12 @@ final class OutputPresetsController {
         presetID: String, targetKind: OutputTargetKind, targetId: String,
         themeId: String?, folder: String? = nil, slideId: String? = nil
     ) {
+        let everyLayer = allLayerIDs
         guard write(presetID, { preset in
             var assignment = preset.assignments.first { $0.targetId == targetId }
                 ?? OutputAssignment(
                     targetKind: targetKind, targetId: targetId,
-                    enabledLayers: LayerKind.allCases.map(\.rawValue).sorted()
+                    enabledLayers: everyLayer
                 )
             assignment.slideThemeId = (themeId?.isEmpty ?? true) ? nil : themeId
 
@@ -357,11 +377,12 @@ final class OutputPresetsController {
     func toggleMask(
         presetID: String, targetKind: OutputTargetKind, targetId: String, maskId: UUID
     ) {
+        let everyLayer = allLayerIDs
         guard write(presetID, { preset in
             var assignment = preset.assignments.first { $0.targetId == targetId }
                 ?? OutputAssignment(
                     targetKind: targetKind, targetId: targetId,
-                    enabledLayers: LayerKind.allCases.map(\.rawValue).sorted()
+                    enabledLayers: everyLayer
                 )
             var ids = Set((assignment.maskIds ?? []).compactMap(UUID.init(uuidString:)))
             if ids.contains(maskId) { ids.remove(maskId) } else { ids.insert(maskId) }
@@ -373,7 +394,91 @@ final class OutputPresetsController {
     }
 
     func clearAssignment(presetID: String, targetId: String) {
-        guard write(presetID, { $0.assignments.removeAll { $0.targetId == targetId } }) else { return }
+        let screens = routableTargets
+        guard write(presetID, { preset in
+            preset.assignments.removeAll { $0.targetId == targetId }
+            for layer in preset.spanningLayerIds { preset.respan(layer: layer, across: screens) }
+        }) else { return }
         if presetID == activePresetID { applyActivePreset() }
+    }
+
+    var layerStack: LayerStack {
+        _ = appModel.version(of: .layerStack)
+        return appModel.layerStack
+    }
+
+    var allLayerIDs: [String] {
+        (LayerKind.allCases.map(\.rawValue) + appModel.layerStack.layers.map(\.id).filter { LayerKind(rawValue: $0) == nil })
+            .sorted()
+    }
+
+    var routableTargets: [LayerTarget] {
+        outputs.displays.map { LayerTarget(targetKind: .display, targetId: $0.uuid) }
+            + outputs.placeholderScreens
+            .filter { outputs.role(forScreen: $0.id) != .confidence }
+            .map { LayerTarget(targetKind: .placeholderScreen, targetId: $0.id.uuidString) }
+    }
+
+    func isSpanning(presetID: String, layer: String) -> Bool {
+        preset(presetID)?.spanningLayerIds.contains(layer) ?? false
+    }
+
+    func setSpanning(_ spanning: Bool, presetID: String, layer: String) {
+        let screens = routableTargets
+        guard write(presetID, { $0.setSpanning(spanning, layer: layer, across: screens) }) else { return }
+        if presetID == activePresetID { applyActivePreset() }
+    }
+
+    func span(presetID: String, layer: String) -> LayerSpan? {
+        preset(presetID)?.span(ofLayer: layer)
+    }
+
+    func updateSpan(presetID: String, layer: String, _ mutate: @escaping @Sendable (inout LayerSpan) -> Void) {
+        guard write(presetID, { $0.updateSpan(ofLayer: layer, mutate) }) else { return }
+        if presetID == activePresetID { applyActivePreset() }
+    }
+
+    func spanSlice(presetID: String, layer: String, targetId: String) -> (position: Int, count: Int)? {
+        guard let targets = preset(presetID)?.span(ofLayer: layer)?.targets,
+              let index = targets.firstIndex(where: { $0.targetId == targetId })
+        else { return nil }
+        return (index + 1, targets.count)
+    }
+
+    func addLayer() -> String {
+        let id = UUID().uuidString
+        appModel.updateLayerStack { $0.addLayer(id: id) }
+
+        for entry in presets {
+            write(entry.id) { preset in
+                for index in preset.assignments.indices where !preset.assignments[index].enabledLayers.contains(id) {
+                    preset.assignments[index].enabledLayers = (preset.assignments[index].enabledLayers + [id]).sorted()
+                }
+            }
+        }
+        return id
+    }
+
+    func removeLayer(_ id: String) {
+        appModel.updateLayerStack { $0.removeLayer(id) }
+        for entry in presets {
+            write(entry.id) { preset in
+                for index in preset.assignments.indices {
+                    preset.assignments[index].enabledLayers.removeAll { $0 == id }
+                }
+                preset.setSpanning(false, layer: id, across: [])
+            }
+        }
+    }
+
+    func updateLayer(_ id: String, _ mutate: @escaping @Sendable (inout ShowLayer) -> Void) {
+        appModel.updateLayerStack { stack in
+            guard let index = stack.layers.firstIndex(where: { $0.id == id }) else { return }
+            mutate(&stack.layers[index])
+        }
+    }
+
+    func moveLayer(_ id: String, up: Bool) {
+        appModel.updateLayerStack { $0.move(id, up: up) }
     }
 }

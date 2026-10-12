@@ -21,6 +21,7 @@ public final class DocumentKindVersions {
     private var signageBoard = 0
     private var effectPresetBoard = 0
     private var animationPresetBoard = 0
+    private var layerStack = 0
     private var midiDevice = 0
     private var streamDestination = 0
     private var importLedger = 0
@@ -60,6 +61,7 @@ public final class DocumentKindVersions {
         case .signageBoard: signageBoard
         case .effectPresetBoard: effectPresetBoard
         case .animationPresetBoard: animationPresetBoard
+        case .layerStack: layerStack
         case .midiDevice: midiDevice
         case .streamDestination: streamDestination
         case .importLedger: importLedger
@@ -94,6 +96,7 @@ public final class DocumentKindVersions {
         case .signageBoard: signageBoard += 1
         case .effectPresetBoard: effectPresetBoard += 1
         case .animationPresetBoard: animationPresetBoard += 1
+        case .layerStack: layerStack += 1
         case .midiDevice: midiDevice += 1
         case .streamDestination: streamDestination += 1
         case .importLedger: importLedger += 1

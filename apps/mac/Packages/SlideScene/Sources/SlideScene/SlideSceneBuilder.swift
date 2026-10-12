@@ -378,33 +378,39 @@ public enum SlideSceneBuilder {
         animationContext: AnimationContext? = nil,
         pageTurn: Paging.Turn = .cut,
         carriedMedia: [LayerKind: String] = [:],
-        screen targetId: String? = nil
+        layerStack: LayerStack = .standard
     ) -> RenderScene {
 
         let canvasSize = explicitCanvas ?? Self.canvasSize(for: presentation)
-        var scene = RenderScene(canvasSize: canvasSize)
+        var scene = RenderScene(canvasSize: canvasSize, layers: ShowState.renderLayers(for: layerStack))
         if let theme, let background = ColorHex.color(theme.backgroundColorHex) {
             scene.background = background
         }
-        let background = ScreenVariants.effectiveBackground(
-            for: slide, presentation: presentation, arrangementId: arrangementId, screen: targetId
+        let background = effectiveBackground(
+            slide: slide, presentation: presentation, arrangementId: arrangementId
         )
-        let slide = slide.rendered(onScreen: targetId)
-        if let background {
+        let cueBackground = background.map { (layer: layerStack.resolvedLayerId(for: $0), mediaId: $0.mediaId) }
+        if let background, let cueBackground {
             scene.addItem(
-                RenderItem(
-                    id: "\(slide.id)-cue-background",
-                    frame: CGRect(origin: .zero, size: canvasSize),
-                    content: .media(id: background.mediaId, scaleMode: .fill)
-                ),
-                to: layerKind(background.layer)
+                layerMediaItem(
+                    background, id: "\(slide.id)-cue-background", layerId: cueBackground.layer,
+                    stack: layerStack, canvasSize: canvasSize),
+                toLayer: cueBackground.layer
+            )
+        }
+        for (index, cue) in (slide.layerMedia ?? []).enumerated() where !cue.mediaId.isEmpty {
+            let layerId = layerStack.resolvedLayerId(for: cue)
+            scene.addItem(
+                layerMediaItem(
+                    cue, id: "\(slide.id)-layer-media-\(index)", layerId: layerId,
+                    stack: layerStack, canvasSize: canvasSize),
+                toLayer: layerId
             )
         }
 
-        let cueBackground = background.map { (layer: layerKind($0.layer), mediaId: $0.mediaId) }
         for layer in LayerKind.allCases {
             if let mediaId = carriedMedia[layer],
-               !(cueBackground?.layer == layer && cueBackground?.mediaId == mediaId) {
+               !(cueBackground?.layer == layer.rawValue && cueBackground?.mediaId == mediaId) {
                 scene.addItem(
                     RenderItem(
                         id: "\(slide.id)-carried-\(layer.rawValue)",
@@ -589,6 +595,21 @@ public enum SlideSceneBuilder {
         }
         let delayed = byDelay.keys.sorted().map { (delay: $0, actions: byDelay[$0]!) }
         return (immediate, delayed)
+    }
+
+    public static func layerMediaItem(
+        _ media: CueMedia, id: String, layerId: String, stack: LayerStack, canvasSize: CGSize
+    ) -> RenderItem {
+        let look = stack.layer(layerId)
+        let scale = (media.scaleMode ?? look?.scaleMode).flatMap { SceneMediaScaleMode(rawValue: $0.rawValue) } ?? .fill
+        var item = RenderItem(
+            id: id,
+            frame: CGRect(origin: .zero, size: canvasSize),
+            content: .media(id: media.mediaId, scaleMode: scale)
+        )
+        if let opacity = look?.opacity { item.opacity = opacity }
+        if let blend = look?.blendMode.flatMap({ SceneBlendMode(rawValue: $0.rawValue) }) { item.blendMode = blend }
+        return item
     }
 
     public static func layerKind(_ layer: CueMediaLayer?) -> LayerKind {

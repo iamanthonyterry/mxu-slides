@@ -145,7 +145,7 @@ import Testing
             .media, .audio, .theme, .service, .playlist, .overlay, .alertPreset,
             .streamRecordPreset, .streamDestination, .actionCombo, .scheduleTrigger,
             .confidenceLayout, .schedulerBoard, .controlBoard, .groupPalette,
-            .signageBoard, .effectPresetBoard, .animationPresetBoard, .serviceLinkRules,
+            .signageBoard, .effectPresetBoard, .animationPresetBoard, .layerStack, .serviceLinkRules,
             .slideBuildingSettings, .outputPreset, .midiDevice,
         ])
         #expect(kinds.count == library.all.count)

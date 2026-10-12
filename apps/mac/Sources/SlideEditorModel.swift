@@ -55,86 +55,6 @@ final class SlideEditorModel {
 
     var isSingleComposition: Bool { isOverlayEditor || isConfidenceEditor }
 
-    struct ScreenChoice: Identifiable, Hashable {
-        var id: String
-        var name: String
-    }
-
-    var editingScreen: String? {
-        didSet {
-            guard editingScreen != oldValue else { return }
-            endCanvasTextEdit()
-            refreshScene()
-        }
-    }
-
-    var supportsScreens: Bool {
-        if case .presentation = host { return !isMultiView } else { return false }
-    }
-
-    var activeScreen: String? {
-        guard supportsScreens, let editingScreen, !editingScreen.isEmpty else { return nil }
-        return editingScreen
-    }
-
-    var screenChoices: [ScreenChoice] {
-        guard supportsScreens, let outputs = render?.outputs else { return [] }
-        var choices = outputs.placeholderScreens
-            .filter { outputs.role(forScreen: $0.id) == .audience }
-            .map { ScreenChoice(id: $0.id.uuidString, name: $0.name) }
-        choices += outputs.displays
-            .filter { outputs.assignedDisplays.contains($0.uuid) }
-            .map { ScreenChoice(id: $0.uuid, name: $0.name) }
-
-        if let screen = editingScreen, !choices.contains(where: { $0.id == screen }) {
-            choices.append(ScreenChoice(id: screen, name: "Missing Screen"))
-        }
-        return choices
-    }
-
-    var activeScreenName: String? {
-        activeScreen.flatMap { id in screenChoices.first { $0.id == id }?.name }
-    }
-
-    func screenHasEdits(_ screen: String) -> Bool {
-        documentSlide.map { ScreenVariants.variant(of: $0, forScreen: screen) != nil } ?? false
-    }
-
-    func hasScreenOverride(_ objectID: String) -> Bool {
-        guard let screen = activeScreen, let slide = documentSlide else { return false }
-        return ScreenEditing.hasOverride(objectID, onScreen: screen, of: slide)
-    }
-
-    func isOnlyOnActiveScreen(_ objectID: String) -> Bool {
-        guard let screen = activeScreen, let slide = documentSlide,
-              let object = slide.objects.first(where: { $0.id == objectID })
-        else { return false }
-        return ScreenEditing.isOnly(object, onScreen: screen, of: slide)
-    }
-
-    func resetToShared(_ ids: Set<String>) {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { ScreenEditing.resetToShared(ids, onScreen: screen, in: &$0) }
-    }
-
-    func resetScreenToShared() {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { slide in
-            slide.screenVariants?.removeAll { $0.targetId == screen }
-            slide = ScreenEditing.pruned(slide)
-        }
-    }
-
-    func showOnAllScreens(_ ids: Set<String>) {
-        guard let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { ScreenEditing.showOnAllScreens(ids, in: &$0) }
-    }
-
-    func showOnlyOnActiveScreen(_ ids: Set<String>) {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { ScreenEditing.showOnly(ids, onScreen: screen, in: &$0) }
-    }
-
     private(set) var presentation: Presentation
     private(set) var selectedSlideID: String?
 
@@ -264,9 +184,7 @@ final class SlideEditorModel {
             }
         }
     }
-    var editorMode: EditorMode = .design {
-        didSet { if oldValue != editorMode, activeScreen != nil { refreshScene() } }
-    }
+    var editorMode: EditorMode = .design
 
     var timelinePointsPerSecond: Double = 120
 
@@ -497,7 +415,6 @@ final class SlideEditorModel {
 
     var currentSlide: Slide? {
         guard var slide = documentSlide else { return nil }
-        if let screen = activeScreen { slide = ScreenEditing.shown(slide, onScreen: screen) }
         if let editing = animationStateEditing,
            let index = slide.objects.firstIndex(where: { $0.id == editing.objectID }) {
             var state = editing.state
@@ -565,20 +482,6 @@ final class SlideEditorModel {
     }
 
     var canvasSize: CGSize { SlideSceneBuilder.canvasSize(for: presentation) }
-
-    var screenCanvas: ScreenCanvas? {
-        guard editorMode == .design, let screen = activeScreen, let size = render?.screenSize(screen) else { return nil }
-        let canvas = ScreenCanvas(deck: canvasSize, screen: size)
-        return canvas.isDeck ? nil : canvas
-    }
-
-    var viewCanvasSize: CGSize { screenCanvas?.size ?? canvasSize }
-
-    var viewCanvasOffset: CGPoint { screenCanvas?.offset ?? .zero }
-
-    var activeScreenResolution: CGSize? {
-        activeScreen.flatMap { render?.screenSize($0) }
-    }
 
     private(set) var isDraggingObjects = false
 
@@ -1388,11 +1291,42 @@ final class SlideEditorModel {
         let ids = await appModel.importFiles(urls)
         for (index, id) in ids.enumerated() {
             let offset = CGFloat(index) * 32
-            dropMediaObject(
-                mediaID: id,
-                at: CGPoint(x: scenePoint.x + offset, y: scenePoint.y + offset)
-            )
+            _ = dropMedia(mediaID: id, at: CGPoint(x: scenePoint.x + offset, y: scenePoint.y + offset))
         }
+    }
+
+    var offersLayersOnDrop: Bool {
+        if case .presentation = host { return !isMultiView && !appModel.ownLayers.isEmpty } else { return false }
+    }
+
+    var layerDrops: [PendingLayerDrop] = []
+
+    func dropMedia(mediaID: String, at scenePoint: CGPoint) -> Bool {
+        guard appModel.media(mediaID) != nil else { return false }
+        guard offersLayersOnDrop, let slideID = selectedSlideID else {
+            return dropMediaObject(mediaID: mediaID, at: scenePoint)
+        }
+        let drop = PendingLayerDrop(mediaID: mediaID, slideID: slideID, scenePoint: scenePoint)
+
+        Task { @MainActor [weak self] in self?.layerDrops.append(drop) }
+        return true
+    }
+
+    func resolveLayerDrop(_ drop: PendingLayerDrop, _ choice: LayerDropChoice) {
+        layerDrops.removeAll { $0.id == drop.id }
+        guard selectedSlideID == drop.slideID else { return }
+        switch choice {
+        case .slide: _ = dropMediaObject(mediaID: drop.mediaID, at: drop.scenePoint)
+        case .layer(let id): addLayerMedia(mediaID: drop.mediaID, onLayer: id)
+        }
+    }
+
+    var layerDropReplacements: [String: String] {
+        var replacing: [String: String] = [:]
+        for entry in documentSlide.map({ appModel.layerStack.layerCues(of: $0) }) ?? [] {
+            replacing[entry.layer.id] = appModel.media(entry.cue.mediaId)?.name ?? "Missing media"
+        }
+        return replacing
     }
 
     func addLiveInputObject() {
@@ -2021,45 +1955,8 @@ final class SlideEditorModel {
 
     var effectiveBackground: CueMedia? {
         guard !isThemeEditor else { return nil }
-        return documentSlide.flatMap {
-            ScreenVariants.effectiveBackground(for: $0, presentation: presentation, screen: activeScreen)
-        }
-    }
-
-    var sharedBackground: CueMedia? {
-        guard !isThemeEditor else { return nil }
-        return documentSlide.flatMap {
+        return currentSlide.flatMap {
             SlideSceneBuilder.effectiveBackground(slide: $0, presentation: presentation)
-        }
-    }
-
-    var screenBackground: ScreenVariants.Background {
-        guard let slide = documentSlide else { return .shared }
-        return ScreenVariants.background(for: slide, presentation: presentation, screen: activeScreen).choice
-    }
-
-    var screenBackgroundIsOwnToThisSlide: Bool {
-        guard let slide = documentSlide else { return false }
-        return ScreenVariants.background(of: ScreenVariants.variant(of: slide, forScreen: activeScreen)) != .shared
-    }
-
-    func useSharedBackground() {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { slide in
-            ScreenEditing.updateVariant(forScreen: screen, in: &slide) {
-                $0.background = nil
-                $0.hidesBackground = nil
-            }
-        }
-    }
-
-    private func writeScreenBackground(_ media: CueMedia?, hides: Bool = false) {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return }
-        updateSlide(slideID) { slide in
-            ScreenEditing.updateVariant(forScreen: screen, in: &slide) {
-                $0.background = media
-                $0.hidesBackground = hides ? true : nil
-            }
         }
     }
 
@@ -2088,11 +1985,6 @@ final class SlideEditorModel {
               let item = appModel.media(mediaID)
         else { return }
         var media = CueMedia.droppedOnSlide(for: item)
-        if activeScreen != nil {
-            media.mode = nil
-            writeScreenBackground(media)
-            return
-        }
 
         media.mode = scope == .untilReplaced ? .untilReplaced : nil
 
@@ -2104,15 +1996,6 @@ final class SlideEditorModel {
     func setDroppedBackground(mediaID: String, onSlide slideID: String) -> Bool {
         guard !isThemeEditor, let media = droppableCueMedia(mediaID)
         else { return false }
-        if let screen = activeScreen {
-            updateSlide(slideID) { slide in
-                ScreenEditing.updateVariant(forScreen: screen, in: &slide) {
-                    $0.background = media
-                    $0.hidesBackground = nil
-                }
-            }
-            return true
-        }
         updateSlide(slideID) { $0.background = media }
         return true
     }
@@ -2201,15 +2084,6 @@ final class SlideEditorModel {
     }
 
     func removeBackground() {
-        if activeScreen != nil {
-
-            if case .own = screenBackground, screenBackgroundIsOwnToThisSlide {
-                useSharedBackground()
-            } else if sharedBackground != nil {
-                writeScreenBackground(nil, hides: true)
-            }
-            return
-        }
         switch backgroundLocation {
         case .slide(let id)?:
             updateSlide(id) { $0.background = nil }
@@ -2226,8 +2100,7 @@ final class SlideEditorModel {
     }
 
     func setBackgroundScope(_ scope: BackgroundScope) {
-        guard activeScreen == nil || screenBackground == .shared,
-              scope != backgroundScope, var media = effectiveBackground,
+        guard scope != backgroundScope, var media = effectiveBackground,
               let slideID = selectedSlideID
         else { return }
         media.mode = scope == .untilReplaced ? .untilReplaced : nil
@@ -2276,10 +2149,6 @@ final class SlideEditorModel {
             render?.media.stop(id: background.mediaId)
             liveMediaIDs.remove(background.mediaId)
         }
-        if case .own = screenBackground, screenBackgroundIsOwnToThisSlide {
-            writeScreenBackground(background)
-            return
-        }
         switch location {
         case .slide(let id):
             updateSlide(id) { $0.background = background }
@@ -2311,6 +2180,37 @@ final class SlideEditorModel {
     func fillLoops(_ object: SlideObject) -> Bool {
         object.fill?.loops
             ?? (appModel.media(object.fill?.mediaId ?? "")?.loops ?? true)
+    }
+
+    var layerMedia: [CueMedia] { documentSlide?.layerMedia ?? [] }
+
+    var layerChoices: [ShowLayer] { appModel.layerStack.topDown }
+
+    func layerID(of cue: CueMedia) -> String { appModel.layerStack.resolvedLayerId(for: cue) }
+
+    func addLayerMedia(mediaID: String, onLayer layerID: String? = nil) {
+        guard !isThemeEditor, let slideID = selectedSlideID, let item = appModel.media(mediaID) else { return }
+        let stack = appModel.layerStack
+        updateSlide(slideID) { slide in
+            slide.send(item, toLayer: layerID ?? slide.openLayer(in: stack), in: stack)
+        }
+    }
+
+    func updateLayerMedia(at index: Int, _ mutate: (inout CueMedia) -> Void) {
+        guard let slideID = selectedSlideID else { return }
+        updateSlide(slideID) { slide in
+            guard slide.layerMedia?.indices.contains(index) == true else { return }
+            mutate(&slide.layerMedia![index])
+        }
+    }
+
+    func removeLayerMedia(at index: Int) {
+        guard let slideID = selectedSlideID else { return }
+        updateSlide(slideID) { slide in
+            guard slide.layerMedia?.indices.contains(index) == true else { return }
+            slide.layerMedia?.remove(at: index)
+            if slide.layerMedia?.isEmpty == true { slide.layerMedia = nil }
+        }
     }
 
     func backgroundMediaName(_ background: CueMedia) -> String {
@@ -2745,28 +2645,7 @@ final class SlideEditorModel {
         updateObject(slideIndex: slideIndex, objectIndex: objectIndex) { $0.text = text }
     }
 
-    private func updateObject(slideIndex: Int, objectIndex: Int, _ rawMutate: (inout SlideObject) -> Void) {
-        var onScreen: ScreenObjectOverride?
-        if let screen = activeScreen, slideIndex == currentSlideIndex {
-            let slide = presentation.slides[slideIndex]
-            let shown = ScreenEditing.shown(slide, onScreen: screen).objects[objectIndex]
-            var probe = shown
-            rawMutate(&probe)
-            guard ScreenEditing.samePlacement(probe, shown) else {
-
-                updateDocument { rawMutate(&$0.slides[slideIndex].objects[objectIndex]) }
-                return
-            }
-            onScreen = ScreenEditing.override(for: shown.id, onScreen: screen, of: slide)
-                ?? ScreenObjectOverride(objectId: shown.id)
-        }
-        func mutate(_ object: inout SlideObject) {
-            guard let onScreen else { return rawMutate(&object) }
-            var shown = ScreenVariants.objects(
-                [object], through: ScreenVariant(targetId: "", objectOverrides: [onScreen]))[0]
-            rawMutate(&shown)
-            object = ScreenEditing.keepingPlacement(of: object, in: shown)
-        }
+    private func updateObject(slideIndex: Int, objectIndex: Int, _ mutate: (inout SlideObject) -> Void) {
         let path = [
             AnyCodingKey("slides"), AnyCodingKey(UInt64(slideIndex)),
             AnyCodingKey("objects"), AnyCodingKey(UInt64(objectIndex)),
@@ -2803,23 +2682,6 @@ final class SlideEditorModel {
     }
 
     private func updateDocument(_ mutate: (inout Presentation) -> Void) {
-        guard let screen = activeScreen, let slideID = selectedSlideID else { return writeDocument(mutate) }
-        writeDocument { document in
-            guard let index = document.slides.firstIndex(where: { $0.id == slideID }) else { return mutate(&document) }
-            let shared = document.slides[index]
-            var shown = document
-            shown.slides[index] = ScreenEditing.shown(shared, onScreen: screen)
-            let before = shown.slides[index]
-            mutate(&shown)
-
-            guard shown.slides.map(\.id) == document.slides.map(\.id) else { return mutate(&document) }
-            shown.slides[index] = ScreenEditing.folded(
-                base: shared, shownBefore: before, shownAfter: shown.slides[index], screen: screen)
-            document = shown
-        }
-    }
-
-    private func writeDocument(_ mutate: (inout Presentation) -> Void) {
         let before = presentation.slides.map(\.id)
         do {
             switch host {
@@ -3192,7 +3054,7 @@ final class SlideEditorModel {
 
         let previewing = animationPreviewPlaying || (animationPreviewTime != nil && animationStateEditing == nil)
         guard var slide = previewing ? documentSlide : currentSlide else {
-            render.scene = RenderScene(canvasSize: viewCanvasSize)
+            render.scene = RenderScene(canvasSize: canvasSize)
             return
         }
 
@@ -3237,7 +3099,7 @@ final class SlideEditorModel {
             showThemeDecor: showsThemeContent,
             animationContext: animationPreviewContext(for: slide),
             carriedMedia: carriedMedia(for: slide),
-            screen: activeScreen
+            layerStack: appModel.layerStack
         ).applyingMediaEffects {
             appModel.mediaSceneEffects(id: $0)
         }.remappingMediaIDs {
@@ -3246,7 +3108,7 @@ final class SlideEditorModel {
         }
 
         insertPushStandIn(into: &scene, slide: slide)
-        return screenCanvas?.fitted(scene) ?? scene
+        return scene
     }
 
     private(set) var clippedTextObjectIDs: Set<String> = []
@@ -3298,11 +3160,10 @@ final class SlideEditorModel {
             wanted.formUnion(template.objects.compactMap(SlideSceneBuilder.fillMediaID))
         }
 
-        if let background = ScreenVariants.effectiveBackground(
-            for: slide, presentation: presentation, screen: activeScreen
-        ) {
+        if let background = SlideSceneBuilder.effectiveBackground(slide: slide, presentation: presentation) {
             wanted.insert(background.mediaId)
         }
+        wanted.formUnion((slide.layerMedia ?? []).map(\.mediaId).filter { !$0.isEmpty })
 
         wanted.formUnion(carriedMedia(for: slide).values)
 

@@ -69,6 +69,20 @@ final class RenderContext {
 
     var nextLiveTransitions: [LayerKind: SceneTransition] = [:]
 
+    var nextLayerTransitions: [String: SceneTransition] = [:]
+
+    var layerTransitions: [String: SceneTransition] = [:]
+
+    private func transitionPicker() -> (RenderLayer) -> SceneTransition? {
+        let stash = nextLiveTransitions
+        let layerStash = nextLayerTransitions
+        let own = layerTransitions
+        return { layer in
+            (layer.isBuiltIn ? stash[layer.kind] : layerStash[layer.id])
+                ?? own[layer.id] ?? Self.roomDefault(for: layer.kind)
+        }
+    }
+
     static func roomDefault(for layer: LayerKind) -> SceneTransition? {
         let defaults = UserDefaults.standard
         switch layer {
@@ -119,11 +133,10 @@ final class RenderContext {
     var liveScene: RenderScene {
         didSet {
             liveBox.value = liveScene
-            let stash = nextLiveTransitions
+            let transition = transitionPicker()
             nextLiveTransitions = [:]
-            transitions.push(liveScene) { layer in
-                stash[layer] ?? Self.roomDefault(for: layer)
-            }
+            nextLayerTransitions = [:]
+            transitions.push(liveScene, layerTransition: transition)
         }
     }
 
@@ -131,7 +144,7 @@ final class RenderContext {
         _ scene: RenderScene, variants: [String: RenderScene],
         screens: [String: RenderScene] = [:], screenLooks: [String: String] = [:]
     ) {
-        let stash = nextLiveTransitions
+        let transition = transitionPicker()
         let previousBase = liveScene
         let previousVariants = lastVariantScenes
         let previousScreens = lastScreenScenes
@@ -148,9 +161,7 @@ final class RenderContext {
                     guard screenScene != shared else { continue }
                     let engine = SceneTransitionEngine(initial: sharedBefore)
                     engines[target] = engine
-                    engine.push(screenScene) { layer in
-                        stash[layer] ?? Self.roomDefault(for: layer)
-                    }
+                    engine.push(screenScene, layerTransition: transition)
                     continue
                 }
 
@@ -158,9 +169,7 @@ final class RenderContext {
                     engines.removeValue(forKey: target)
                     continue
                 }
-                engine.push(screenScene) { layer in
-                    stash[layer] ?? Self.roomDefault(for: layer)
-                }
+                engine.push(screenScene, layerTransition: transition)
             }
         }
         lastVariantScenes = variants
@@ -172,9 +181,7 @@ final class RenderContext {
             for (themeID, variant) in variants {
                 let engine = engines[themeID] ?? SceneTransitionEngine(initial: variant)
                 engines[themeID] = engine
-                engine.push(variant) { layer in
-                    stash[layer] ?? Self.roomDefault(for: layer)
-                }
+                engine.push(variant, layerTransition: transition)
             }
         }
         liveScene = scene
@@ -236,7 +243,7 @@ final class RenderContext {
                 engine.scene(at: now), info: confidenceBox.value, at: now
             )
         }
-        outputs.screenVariantSceneProvider = { [screenEngines, confidenceBox] targetID in
+        outputs.screenSceneProvider = { [screenEngines, confidenceBox] targetID in
             guard let engine = screenEngines.value[targetID] else { return nil }
             let now = Date()
             return VisibilityRules.filteredScene(

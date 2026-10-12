@@ -524,7 +524,7 @@ public final class OutputManager {
 
     public var variantSceneProvider: (@Sendable (String) -> RenderScene?)?
 
-    public var screenVariantSceneProvider: (@Sendable (String) -> RenderScene?)?
+    public var screenSceneProvider: (@Sendable (String) -> RenderScene?)?
 
     public func previewProvider(for targetID: String) -> @Sendable () -> RenderScene {
         provider(for: targetID)
@@ -535,7 +535,7 @@ public final class OutputManager {
         let confidence = confidenceSceneProvider
         let signage = signageSceneProvider
         let variants = variantSceneProvider
-        let screenVariants = screenVariantSceneProvider
+        let screenVariants = screenSceneProvider
         let routing = layerRouting
         let themeRouting = slideThemeRouting
         let roles = roleBox
@@ -576,7 +576,7 @@ public final class OutputManager {
             }
             guard let enabled = routing.value[routingKey] else { return scene }
             for index in scene.layers.indices
-            where !enabled.contains(scene.layers[index].kind.rawValue) {
+            where !enabled.contains(scene.layers[index].id) {
                 scene.layers[index].isHidden = true
             }
             return scene

@@ -130,7 +130,7 @@ final class EditorInteractionNSView: NSView {
     }
 
     private func overlayHomography(for object: SlideObject, frame: CGRect) -> EditorGeometry.Homography? {
-        let canvasView = viewRect(fromScene: viewCanvasSceneRect)
+        let canvasView = viewRect(fromScene: CGRect(origin: .zero, size: model.canvasSize))
         guard let corners = EditorGeometry.perspectiveCorners(
             frame: frame, object: object, canvasSize: canvasView.size
         ) else { return nil }
@@ -254,19 +254,12 @@ final class EditorInteractionNSView: NSView {
 
     private var sceneScale: CGFloat {
         EditorGeometry.letterbox(
-            canvas: model.viewCanvasSize, in: bounds.size, inset: EditorGeometry.pasteboardInset).scale
+            canvas: model.canvasSize, in: bounds.size, inset: EditorGeometry.pasteboardInset).scale
     }
 
     private var sceneOrigin: CGPoint {
-        let box = EditorGeometry.letterbox(
-            canvas: model.viewCanvasSize, in: bounds.size, inset: EditorGeometry.pasteboardInset)
-        let offset = model.viewCanvasOffset
-        return CGPoint(x: box.origin.x + offset.x * box.scale, y: box.origin.y + offset.y * box.scale)
-    }
-
-    private var viewCanvasSceneRect: CGRect {
-        let offset = model.viewCanvasOffset
-        return CGRect(origin: CGPoint(x: -offset.x, y: -offset.y), size: model.viewCanvasSize)
+        EditorGeometry.letterbox(
+            canvas: model.canvasSize, in: bounds.size, inset: EditorGeometry.pasteboardInset).origin
     }
 
     private func scenePoint(fromView point: CGPoint) -> CGPoint {
@@ -930,7 +923,7 @@ final class EditorInteractionNSView: NSView {
     }
 
     var canvasViewRect: CGRect {
-        viewRect(fromScene: viewCanvasSceneRect)
+        viewRect(fromScene: CGRect(origin: .zero, size: model.canvasSize))
     }
 
     private func drawPasteboardVeil(in context: CGContext) {

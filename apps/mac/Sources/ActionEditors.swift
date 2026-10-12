@@ -187,6 +187,9 @@ struct ActionParameterFields: View {
                 ForEach(LayerKind.allCases.reversed(), id: \.rawValue) { layer in
                     Text(layer.displayName).tag(layer.rawValue)
                 }
+                ForEach(model.ownLayers, id: \.id) { layer in
+                    Text(layer.name).tag(layer.id)
+                }
             }
         case .switchOutputPreset:
             Picker("Preset", selection: stringBinding(action, \.presetId)) {
@@ -700,6 +703,11 @@ struct AddActionMenuItems: View {
             ForEach(LayerKind.allCases.reversed(), id: \.rawValue) { layer in
                 Button(layer.displayName) {
                     add(make(.clearLayer) { $0.layer = layer.rawValue })
+                }
+            }
+            ForEach(model.ownLayers, id: \.id) { layer in
+                Button(layer.name) {
+                    add(make(.clearLayer) { $0.layer = layer.id })
                 }
             }
             Divider()

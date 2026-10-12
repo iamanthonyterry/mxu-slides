@@ -32,6 +32,8 @@ struct ScreenConfigurationView: View {
 
         case preset(String)
 
+        case layers
+
         case signage(String)
     }
 
@@ -86,6 +88,8 @@ struct ScreenConfigurationView: View {
             return
         case .preset(let id) where presets?.preset(id) != nil:
             return
+        case .layers where presets != nil:
+            return
         case .signage(let id) where signage?.channel(id) != nil:
             return
         default:
@@ -139,6 +143,9 @@ struct ScreenConfigurationView: View {
                     ForEach(presets.presets, id: \.id) { entry in
                         presetListRow(entry, presets: presets)
                     }
+                    sectionLabel("Layers")
+                        .padding(.top, 12)
+                    layersListRow(presets)
                 }
                 if let signage {
                     signageSection(signage)
@@ -269,6 +276,47 @@ struct ScreenConfigurationView: View {
         guard channel.playlistId != nil else { return "dark — assign content in the Signage module" }
         let screens = signage.screenNames(showing: channel.id)
         return screens.isEmpty ? "content set — no screens" : "on \(screens.joined(separator: ", "))"
+    }
+
+    private func layersListRow(_ presets: OutputPresetsController) -> some View {
+        let selected = selection == .layers
+        let count = presets.layerStack.layers.count
+        return Button {
+            selection = .layers
+        } label: {
+            HStack(spacing: 8) {
+                RoundedRectangle.standard(4)
+                    .fill(Color.primary.opacity(0.08))
+                    .overlay {
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                    .overlay(
+                        RoundedRectangle.standard(4)
+                            .strokeBorder(Color.separator.opacity(0.5), lineWidth: 1)
+                    )
+                    .frame(width: 46, height: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Layers")
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    Text("\(count) media layers")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(6)
+            .contentShape(RoundedRectangle.standard(CornerStandard.element))
+        }
+        .buttonStyle(.plain)
+        .background(
+            selected ? Color.primary.opacity(0.08) : .clear,
+            in: RoundedRectangle.standard(CornerStandard.element)
+        )
+        .help("Stack media layers and choose which screens show each, or span one across several")
     }
 
     private func addPresetMenu(_ presets: OutputPresetsController) -> some View {
@@ -586,6 +634,10 @@ struct ScreenConfigurationView: View {
                 case .preset(let id):
                     if let presets, presets.preset(id) != nil {
                         PresetDetail(outputs: outputs, presets: presets, render: render, presetID: id)
+                    }
+                case .layers:
+                    if let presets {
+                        LayersPage(outputs: outputs, presets: presets)
                     }
                 case .signage(let id):
                     if let signage, let channel = signage.channel(id) {

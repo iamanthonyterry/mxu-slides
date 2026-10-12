@@ -27,6 +27,39 @@ final class SceneTransitionEngineTests: XCTestCase {
         )
     }
 
+    func testALayerOfTheUsersOwnTransitionsOnItsOwn() {
+        func walls(_ media: String?) -> RenderScene {
+            var scene = RenderScene(canvasSize: CGSize(width: 192, height: 108))
+            scene.layers.insert(RenderLayer(id: "walls", kind: .videos, name: "Walls"), at: 4)
+            scene.addItem(RenderItem(
+                id: "built-in", frame: CGRect(x: 0, y: 0, width: 10, height: 10), content: .media(id: "clip")
+            ), to: .videos)
+            if let media {
+                scene.addItem(RenderItem(
+                    id: "live-media-walls", frame: CGRect(x: 0, y: 0, width: 10, height: 10),
+                    content: .media(id: media)
+                ), toLayer: "walls")
+            }
+            return scene
+        }
+        XCTAssertEqual(walls("a").layers.first { $0.id == "videos" }?.items.count, 1,
+                       "the built-in layer keeps its own items apart from a layer of the same kind")
+        XCTAssertEqual(SceneTransitionEngine.changedLayerIDs(from: walls("a"), to: walls("b")), ["walls"])
+        XCTAssertEqual(SceneTransitionEngine.changedLayerIDs(from: walls(nil), to: walls("a")), ["walls"])
+
+        let engine = SceneTransitionEngine(initial: walls("a"))
+        var asked: [String] = []
+        engine.push(walls("b"), layerTransition: { layer in
+            asked.append(layer.id)
+            return SceneTransition(kind: .dissolve, duration: 1)
+        })
+        XCTAssertEqual(asked, ["walls"])
+        let mid = engine.scene(at: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(mid.layers.first { $0.id == "walls" }?.items.count, 2, "old and new cross on the layer")
+        XCTAssertEqual(mid.layers.first { $0.id == "videos" }?.items.map(\.opacity), [1])
+        XCTAssertEqual(engine.heldMediaIDs(), ["a"])
+    }
+
     func testDissolveFadesLeavingAndArrivingButNeverStaying() {
         let composite = SceneTransitionEngine.composite(
             previous: scene(["stay", "leave"]), target: scene(["stay", "arrive"]),

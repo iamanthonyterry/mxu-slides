@@ -1,3 +1,4 @@
+import PresenterCore
 import RenderEngine
 import SlideScene
 import SwiftUI
@@ -60,6 +61,9 @@ struct ClearChip: View {
 
             ForEach(Array(LayerKind.allCases.reversed()), id: \.self) { layer in
                 layerButton(layer)
+            }
+            ForEach(controls.ownLayers, id: \.id) { layer in
+                ownLayerButton(layer)
             }
         }
         .padding(12)
@@ -150,6 +154,35 @@ struct ClearChip: View {
                 )
         )
         .help("Clear Layer: sweep \(layer.displayName) — green means live")
+    }
+
+    private func ownLayerButton(_ layer: ShowLayer) -> some View {
+        let live = controls.hasContent(layerID: layer.id)
+        return Button {
+            controls.clear(layerID: layer.id)
+        } label: {
+            Text(layer.name)
+                .font(.caption.weight(live ? .medium : .regular))
+                .foregroundStyle(live ? Color.green : .secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            live ? Color.green.opacity(0.10) : Color.primary.opacity(0.05),
+            in: RoundedRectangle.standard(CornerStandard.element)
+        )
+        .overlay(
+            RoundedRectangle.standard(CornerStandard.element)
+                .strokeBorder(
+                    live ? Color.green.opacity(0.4) : Color.separator.opacity(0.5),
+                    lineWidth: 1
+                )
+        )
+        .help("Clear Layer: sweep \(layer.name) — green means live")
     }
 
     private func sectionLabel(_ text: String) -> some View {

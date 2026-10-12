@@ -60,7 +60,7 @@ public enum BackupSection: String, Codable, CaseIterable, Sendable {
         case .service, .serviceLinkRules: .services
         case .scheduleTrigger, .schedulerBoard: .schedules
         case .note: .notes
-        case .outputPreset: .outputPresets
+        case .outputPreset, .layerStack: .outputPresets
         case .streamRecordPreset, .streamDestination: .streaming
         case .midiDevice: .midiDevices
         case .controlBoard: .controlBoards

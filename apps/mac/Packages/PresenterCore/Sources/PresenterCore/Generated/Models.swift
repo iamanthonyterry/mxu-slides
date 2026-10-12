@@ -737,49 +737,51 @@ public struct CueMedia: Codable, Sendable, Equatable {
     public var mediaId: String
     public var mode: CueMediaMode?
     public var layer: CueMediaLayer?
+    public var layerId: String?
     public var loops: Bool?
     public var classification: MediaClassification?
+    public var scaleMode: MediaScaleMode?
 
-    public init(mediaId: String, mode: CueMediaMode? = nil, layer: CueMediaLayer? = nil, loops: Bool? = nil, classification: MediaClassification? = nil) {
+    public init(mediaId: String, mode: CueMediaMode? = nil, layer: CueMediaLayer? = nil, layerId: String? = nil, loops: Bool? = nil, classification: MediaClassification? = nil, scaleMode: MediaScaleMode? = nil) {
         self.mediaId = mediaId
         self.mode = mode
         self.layer = layer
+        self.layerId = layerId
         self.loops = loops
         self.classification = classification
+        self.scaleMode = scaleMode
     }
 }
 
-public struct ScreenObjectOverride: Codable, Sendable, Equatable {
-    public var objectId: String
-    public var x: Double?
-    public var y: Double?
-    public var width: Double?
-    public var height: Double?
-    public var rotationDegrees: Double?
-    public var hidden: Bool?
+public struct ShowLayer: Codable, Sendable, Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var aboveSlide: Bool?
+    public var opacity: Double?
+    public var blendMode: BlendMode?
+    public var scaleMode: MediaScaleMode?
+    public var transition: Transition?
+    public var colorHex: String?
 
-    public init(objectId: String, x: Double? = nil, y: Double? = nil, width: Double? = nil, height: Double? = nil, rotationDegrees: Double? = nil, hidden: Bool? = nil) {
-        self.objectId = objectId
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.rotationDegrees = rotationDegrees
-        self.hidden = hidden
+    public init(id: String, name: String, aboveSlide: Bool? = nil, opacity: Double? = nil, blendMode: BlendMode? = nil, scaleMode: MediaScaleMode? = nil, transition: Transition? = nil, colorHex: String? = nil) {
+        self.id = id
+        self.name = name
+        self.aboveSlide = aboveSlide
+        self.opacity = opacity
+        self.blendMode = blendMode
+        self.scaleMode = scaleMode
+        self.transition = transition
+        self.colorHex = colorHex
     }
 }
 
-public struct ScreenVariant: Codable, Sendable, Equatable {
-    public var targetId: String
-    public var background: CueMedia?
-    public var hidesBackground: Bool?
-    public var objectOverrides: [ScreenObjectOverride]?
+public struct LayerStack: Codable, Sendable, Equatable, Identifiable {
+    public var id: String
+    public var layers: [ShowLayer]
 
-    public init(targetId: String, background: CueMedia? = nil, hidesBackground: Bool? = nil, objectOverrides: [ScreenObjectOverride]? = nil) {
-        self.targetId = targetId
-        self.background = background
-        self.hidesBackground = hidesBackground
-        self.objectOverrides = objectOverrides
+    public init(id: String, layers: [ShowLayer]) {
+        self.id = id
+        self.layers = layers
     }
 }
 
@@ -788,6 +790,7 @@ public struct Slide: Codable, Sendable, Equatable, Identifiable {
     public var name: String
     public var objects: [SlideObject]
     public var background: CueMedia?
+    public var layerMedia: [CueMedia]?
     public var backgroundFill: ObjectFill?
     public var sectionId: String?
     public var folder: String?
@@ -803,13 +806,13 @@ public struct Slide: Codable, Sendable, Equatable, Identifiable {
     public var buildOrder: [String]?
     public var keepWords: Bool?
     public var history: [SlideVersion]?
-    public var screenVariants: [ScreenVariant]?
 
-    public init(id: String, name: String, objects: [SlideObject], background: CueMedia? = nil, backgroundFill: ObjectFill? = nil, sectionId: String? = nil, folder: String? = nil, themeSlideName: String? = nil, themeId: String? = nil, unthemed: Bool? = nil, overrideDesigns: [OverrideDesign]? = nil, actions: [SlideAction]? = nil, notes: String? = nil, autoAdvance: AutoAdvance? = nil, transition: Transition? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil, keepWords: Bool? = nil, history: [SlideVersion]? = nil, screenVariants: [ScreenVariant]? = nil) {
+    public init(id: String, name: String, objects: [SlideObject], background: CueMedia? = nil, layerMedia: [CueMedia]? = nil, backgroundFill: ObjectFill? = nil, sectionId: String? = nil, folder: String? = nil, themeSlideName: String? = nil, themeId: String? = nil, unthemed: Bool? = nil, overrideDesigns: [OverrideDesign]? = nil, actions: [SlideAction]? = nil, notes: String? = nil, autoAdvance: AutoAdvance? = nil, transition: Transition? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil, keepWords: Bool? = nil, history: [SlideVersion]? = nil) {
         self.id = id
         self.name = name
         self.objects = objects
         self.background = background
+        self.layerMedia = layerMedia
         self.backgroundFill = backgroundFill
         self.sectionId = sectionId
         self.folder = folder
@@ -825,7 +828,6 @@ public struct Slide: Codable, Sendable, Equatable, Identifiable {
         self.buildOrder = buildOrder
         self.keepWords = keepWords
         self.history = history
-        self.screenVariants = screenVariants
     }
 }
 
@@ -1007,8 +1009,9 @@ public struct MediaItem: Codable, Sendable, Equatable, Identifiable {
     public var recordedByPresetId: String?
     public var actions: [SlideAction]?
     public var autoAdvance: AutoAdvance?
+    public var layerId: String?
 
-    public init(id: String, name: String, mediaKind: MediaKind, classification: MediaClassification, fileHash: String, fileName: String, fileStatus: MediaFileStatus, statusDetail: String, tags: [String], favorite: Bool, collections: [String], loops: Bool, inPoint: Double? = nil, outPoint: Double? = nil, playRate: Double? = nil, effects: [Effect]? = nil, transition: Transition? = nil, durationSeconds: Double? = nil, pixelWidth: Int? = nil, pixelHeight: Int? = nil, folder: String? = nil, folderId: String? = nil, recordedAt: Double? = nil, recordedByPresetId: String? = nil, actions: [SlideAction]? = nil, autoAdvance: AutoAdvance? = nil) {
+    public init(id: String, name: String, mediaKind: MediaKind, classification: MediaClassification, fileHash: String, fileName: String, fileStatus: MediaFileStatus, statusDetail: String, tags: [String], favorite: Bool, collections: [String], loops: Bool, inPoint: Double? = nil, outPoint: Double? = nil, playRate: Double? = nil, effects: [Effect]? = nil, transition: Transition? = nil, durationSeconds: Double? = nil, pixelWidth: Int? = nil, pixelHeight: Int? = nil, folder: String? = nil, folderId: String? = nil, recordedAt: Double? = nil, recordedByPresetId: String? = nil, actions: [SlideAction]? = nil, autoAdvance: AutoAdvance? = nil, layerId: String? = nil) {
         self.id = id
         self.name = name
         self.mediaKind = mediaKind
@@ -1035,6 +1038,7 @@ public struct MediaItem: Codable, Sendable, Equatable, Identifiable {
         self.recordedByPresetId = recordedByPresetId
         self.actions = actions
         self.autoAdvance = autoAdvance
+        self.layerId = layerId
     }
 }
 
@@ -1422,15 +1426,39 @@ public struct OutputAssignment: Codable, Sendable, Equatable {
     }
 }
 
+public struct LayerTarget: Codable, Sendable, Equatable {
+    public var targetKind: OutputTargetKind
+    public var targetId: String
+    public var source: MediaSourceRect?
+
+    public init(targetKind: OutputTargetKind, targetId: String, source: MediaSourceRect? = nil) {
+        self.targetKind = targetKind
+        self.targetId = targetId
+        self.source = source
+    }
+}
+
+public struct LayerSpan: Codable, Sendable, Equatable {
+    public var layerId: String
+    public var targets: [LayerTarget]
+
+    public init(layerId: String, targets: [LayerTarget]) {
+        self.layerId = layerId
+        self.targets = targets
+    }
+}
+
 public struct OutputPreset: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     public var name: String
     public var assignments: [OutputAssignment]
+    public var layerSpans: [LayerSpan]?
 
-    public init(id: String, name: String, assignments: [OutputAssignment]) {
+    public init(id: String, name: String, assignments: [OutputAssignment], layerSpans: [LayerSpan]? = nil) {
         self.id = id
         self.name = name
         self.assignments = assignments
+        self.layerSpans = layerSpans
     }
 }
 

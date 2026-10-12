@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 132,
+  "schemaVersion": 133,
   "types": {
     "SlideObjectKind": {
       "kind": "enum",
@@ -1380,6 +1380,11 @@
           "optional": true
         },
         {
+          "name": "layerId",
+          "type": "string",
+          "optional": true
+        },
+        {
           "name": "loops",
           "type": "bool",
           "optional": true
@@ -1388,69 +1393,67 @@
           "name": "classification",
           "type": "MediaClassification",
           "optional": true
-        }
-      ]
-    },
-    "ScreenObjectOverride": {
-      "kind": "record",
-      "fields": [
-        {
-          "name": "objectId",
-          "type": "string"
         },
         {
-          "name": "x",
-          "type": "double",
-          "optional": true
-        },
-        {
-          "name": "y",
-          "type": "double",
-          "optional": true
-        },
-        {
-          "name": "width",
-          "type": "double",
-          "optional": true
-        },
-        {
-          "name": "height",
-          "type": "double",
-          "optional": true
-        },
-        {
-          "name": "rotationDegrees",
-          "type": "double",
-          "optional": true
-        },
-        {
-          "name": "hidden",
-          "type": "bool",
+          "name": "scaleMode",
+          "type": "MediaScaleMode",
           "optional": true
         }
       ]
     },
-    "ScreenVariant": {
+    "ShowLayer": {
       "kind": "record",
       "fields": [
         {
-          "name": "targetId",
+          "name": "id",
           "type": "string"
         },
         {
-          "name": "background",
-          "type": "CueMedia",
-          "optional": true
+          "name": "name",
+          "type": "string"
         },
         {
-          "name": "hidesBackground",
+          "name": "aboveSlide",
           "type": "bool",
           "optional": true
         },
         {
-          "name": "objectOverrides",
-          "type": "list:ScreenObjectOverride",
+          "name": "opacity",
+          "type": "double",
           "optional": true
+        },
+        {
+          "name": "blendMode",
+          "type": "BlendMode",
+          "optional": true
+        },
+        {
+          "name": "scaleMode",
+          "type": "MediaScaleMode",
+          "optional": true
+        },
+        {
+          "name": "transition",
+          "type": "Transition",
+          "optional": true
+        },
+        {
+          "name": "colorHex",
+          "type": "string",
+          "optional": true
+        }
+      ]
+    },
+    "LayerStack": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "layers",
+          "type": "list:ShowLayer"
         }
       ]
     },
@@ -1472,6 +1475,11 @@
         {
           "name": "background",
           "type": "CueMedia",
+          "optional": true
+        },
+        {
+          "name": "layerMedia",
+          "type": "list:CueMedia",
           "optional": true
         },
         {
@@ -1547,11 +1555,6 @@
         {
           "name": "history",
           "type": "list:SlideVersion",
-          "optional": true
-        },
-        {
-          "name": "screenVariants",
-          "type": "list:ScreenVariant",
           "optional": true
         }
       ]
@@ -1938,6 +1941,11 @@
         {
           "name": "autoAdvance",
           "type": "AutoAdvance",
+          "optional": true
+        },
+        {
+          "name": "layerId",
+          "type": "string",
           "optional": true
         }
       ]
@@ -2605,6 +2613,37 @@
         }
       ]
     },
+    "LayerTarget": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "targetKind",
+          "type": "OutputTargetKind"
+        },
+        {
+          "name": "targetId",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "MediaSourceRect",
+          "optional": true
+        }
+      ]
+    },
+    "LayerSpan": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "layerId",
+          "type": "string"
+        },
+        {
+          "name": "targets",
+          "type": "list:LayerTarget"
+        }
+      ]
+    },
     "OutputPreset": {
       "kind": "record",
       "fields": [
@@ -2619,6 +2658,11 @@
         {
           "name": "assignments",
           "type": "list:OutputAssignment"
+        },
+        {
+          "name": "layerSpans",
+          "type": "list:LayerSpan",
+          "optional": true
         }
       ]
     },

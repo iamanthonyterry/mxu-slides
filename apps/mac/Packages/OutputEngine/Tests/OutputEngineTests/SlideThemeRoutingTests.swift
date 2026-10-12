@@ -17,6 +17,29 @@ final class SlideThemeRoutingTests: XCTestCase {
         }
     }
 
+    func testALayerOfTheUsersOwnRoutesByItsOwnName() throws {
+        let outputs = try makeManager()
+        let stream = UUID().uuidString
+        let wall = UUID().uuidString
+        outputs.sceneProvider = {
+            var scene = taggedScene(100)
+            scene.layers.insert(RenderLayer(id: "walls", kind: .videos, name: "Walls"), at: 4)
+            return scene
+        }
+        outputs.setLayerRouting([
+            stream: [LayerKind.slide.rawValue, LayerKind.videos.rawValue],
+            wall: ["walls"],
+        ])
+        func hidden(_ target: String) -> [String] {
+            outputs.previewProvider(for: target)().layers.filter(\.isHidden).map(\.id)
+        }
+        XCTAssertTrue(hidden(stream).contains("walls"), "routing the built-in videos layer does not carry Walls")
+        XCTAssertFalse(hidden(stream).contains("videos"))
+        XCTAssertFalse(hidden(wall).contains("walls"))
+        XCTAssertTrue(hidden(wall).contains("videos"))
+        XCTAssertTrue(hidden(UUID().uuidString).isEmpty, "a screen with no routing shows every layer")
+    }
+
     func testThemeRoutedTargetCompositesItsVariant() throws {
         let outputs = try makeManager()
         let stream = UUID().uuidString
@@ -44,7 +67,7 @@ final class SlideThemeRoutingTests: XCTestCase {
         let centerWall = UUID().uuidString
         outputs.sceneProvider = { taggedScene(100) }
         outputs.variantSceneProvider = { _ in taggedScene(200) }
-        outputs.screenVariantSceneProvider = { targetID in
+        outputs.screenSceneProvider = { targetID in
             targetID == sideWall ? taggedScene(300) : nil
         }
         outputs.setSlideThemeRouting([sideWall: "walls", centerWall: "walls"])
