@@ -4,6 +4,7 @@ import Foundation
 import Observation
 import PresenterCore
 import QuartzCore
+import SwiftUI
 import TimecodeKit
 
 /// Taps one mono channel of an audio input and decodes LTC from it on the audio
@@ -101,6 +102,7 @@ final class TimecodeController {
         static let deviceUID = "timecode.deviceUID"
         static let channel = "timecode.channel"
         static let earlyFrames = "timecode.earlyFrames"
+        static let lastRate = "timecode.lastRate"
     }
 
     var enabled: Bool {
@@ -121,10 +123,34 @@ final class TimecodeController {
     private(set) var status: Status = .off
     private(set) var timecode: Timecode?
     private(set) var rate: TimecodeRate?
+
+    /// The rate timecode last arrived at (remembered across launches), for
+    /// editing timelines when no timecode is running.
+    var editingRate: TimecodeRate {
+        rate ?? UserDefaults.standard.string(forKey: Key.lastRate).flatMap(TimecodeRate.init(rawValue:)) ?? .fps25
+    }
     private(set) var inputPeak: Float = 0
     private(set) var activeSongName: String?
     private(set) var serviceName: String?
     private(set) var followedSongCount = 0
+
+    /// Latest timecode label (seconds, one frame past the decoded label, without
+    /// the fire-early adjustment) and the host time it was current at.
+    private(set) var liveLabel: Double?
+    private(set) var liveLabelHost: Double?
+
+    /// While true, cues are tracked but not fired — the timeline editor sets this
+    /// during a record pass so the old cues don't fire over the new taps.
+    var suppressFiring = false
+
+    /// The timecode label right now, extrapolated between frames for a smooth
+    /// playhead. Nil unless timecode is actually running.
+    func livePosition(at now: Double = CACurrentMediaTime()) -> Double? {
+        guard status == .running, let label = liveLabel, let host = liveLabelHost else { return nil }
+        let elapsed = now - host
+        guard elapsed >= 0, elapsed < 1 else { return label }
+        return label + elapsed
+    }
 
     private let bridge: AppAPIBridge
     private let input = TimecodeAudioInput()
@@ -222,14 +248,26 @@ final class TimecodeController {
             let rate = frame.rate
             let frameLength = 1 / Double(rate.nominalFrames)
             // The label names the frame that just finished, so the clock is one frame past it.
-            let label = frame.timecode.labelSeconds(rate: rate)
-                + frameLength * Double(1 + earlyFrames)
+            let current = frame.timecode.labelSeconds(rate: rate) + frameLength
+            let label = current + frameLength * Double(earlyFrames)
             let at = bufferStartHost + Double(frame.sampleIndex) / sampleRate
+            liveLabel = current
+            liveLabelHost = at
             timecode = frame.timecode
-            self.rate = rate
+            if self.rate != rate {
+                self.rate = rate
+                UserDefaults.standard.set(rate.rawValue, forKey: Key.lastRate)
+            }
             handle(chase.receive(position: label, at: at))
         }
         if chase.isRunning { status = .running }
+    }
+
+    /// Re-fires whatever cue the timecode is on now, e.g. after the editor
+    /// saves a timeline or finishes a record pass.
+    func resync() {
+        chase.resync()
+        Task { await refreshTimelines() }
     }
 
     private func handle(_ events: [ChaseEvent]) {
@@ -237,6 +275,7 @@ final class TimecodeController {
             switch event {
             case .fire(let presentationID, let slideID, _, let occurrence):
                 activeSongName = songNames[presentationID]
+                if suppressFiring { continue }
                 DiagnosticsStore.shared.note("timecode.fire", detail: "\(timecode?.description ?? "") \(slideID)")
                 Task { await bridge.fireTimelineCue(
                     presentationID: presentationID, slideID: slideID, occurrence: occurrence) }
@@ -244,5 +283,16 @@ final class TimecodeController {
                 status = .stopped
             }
         }
+    }
+}
+
+private struct TimecodeControllerKey: EnvironmentKey {
+    static let defaultValue: TimecodeController? = nil
+}
+
+extension EnvironmentValues {
+    var timecode: TimecodeController? {
+        get { self[TimecodeControllerKey.self] }
+        set { self[TimecodeControllerKey.self] = newValue }
     }
 }

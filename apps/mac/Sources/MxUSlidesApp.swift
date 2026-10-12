@@ -221,6 +221,7 @@ struct MxUSlidesApp: App {
                 .environment(\.confidenceMonitor, confidenceMonitor)
                 .environment(\.signage, signage)
                 .environment(\.mediaPlaylists, mediaPlaylists)
+                .environment(\.timecode, timecode)
 
                 .overlay(alignment: .bottom) {
                     GoToSlideHUD(keyIn: keyIn).padding(.bottom, 48)

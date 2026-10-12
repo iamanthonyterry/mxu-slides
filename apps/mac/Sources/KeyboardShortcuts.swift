@@ -165,6 +165,9 @@ final class KeyInController {
         }
 
         if NSApp.keyWindow?.attachedSheet != nil { return false }
+        // When a sheet is key, the key window is the sheet itself; its keys
+        // (e.g. arrow nudges in the timeline editor) must not drive the show.
+        if NSApp.keyWindow?.sheetParent != nil { return false }
 
         let runOnly = UserDefaults.standard.bool(forKey: PresentLayoutController.lockedKey)
 
