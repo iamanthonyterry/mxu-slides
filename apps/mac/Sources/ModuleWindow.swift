@@ -152,8 +152,39 @@ struct PreviewWindowView: View {
     }
 }
 
+struct MediaPreviewWindowView: View {
+    let model: AppModel
+
+    @AppStorage("app.appearance") private var appearanceRaw = AppAppearance.dark.rawValue
+
+    var body: some View {
+        Group {
+            if let id = model.mediaPreviewEntryID, let entry = model.indexEntry(id) {
+                MediaEditorView(model: model, entry: entry, standalone: true)
+                    .id(entry.id)
+            } else {
+                ContentUnavailableView(
+                    "Nothing to Preview", systemImage: "photo",
+                    description: Text("Pick a media or music item in the library.")
+                )
+                .navigationTitle("Media Preview")
+            }
+        }
+        .frame(minWidth: 640, minHeight: 360)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.basePlane)
+        .background(
+            ModuleWindowConfigurator(autosaveName: "library.mediaPreview", floats: true) {
+                model.closeMediaPreview()
+            }
+        )
+        .preferredColorScheme((AppAppearance(rawValue: appearanceRaw) ?? .dark).colorScheme)
+    }
+}
+
 struct ModuleWindowConfigurator: NSViewRepresentable {
     let autosaveName: String
+    var floats = false
     let onClose: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -177,6 +208,10 @@ struct ModuleWindowConfigurator: NSViewRepresentable {
     private func configure(_ window: NSWindow?, coordinator: Coordinator) {
         guard let window, coordinator.window !== window else { return }
         window.isRestorable = false
+        if floats {
+            window.level = .floating
+            window.hidesOnDeactivate = true
+        }
         window.setFrameUsingName(autosaveName)
         window.setFrameAutosaveName(autosaveName)
         coordinator.attach(to: window)

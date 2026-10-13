@@ -633,6 +633,7 @@ private struct VideoPreviewSurface: NSViewRepresentable {
 struct MediaEditorView: View {
     let model: AppModel
     let entry: LibraryIndex.Entry
+    var standalone = false
 
     @State private var preview = MediaPreviewPlayer()
 
@@ -664,15 +665,19 @@ struct MediaEditorView: View {
         HStack(spacing: CornerStandard.panelInset) {
             VStack(spacing: 0) {
 
-                Color.clear
-                    .frame(height: ShellView.headerHeight - CornerStandard.panelInset)
+                if !standalone {
+                    Color.clear
+                        .frame(height: ShellView.headerHeight - CornerStandard.panelInset)
+                }
                 previewArea
             }
             .frame(maxWidth: .infinity)
             VStack(spacing: 0) {
 
-                Color.clear
-                    .frame(height: ShellView.headerHeight - CornerStandard.panelInset)
+                if !standalone {
+                    Color.clear
+                        .frame(height: ShellView.headerHeight - CornerStandard.panelInset)
+                }
                 settingsPanel
             }
 
@@ -682,6 +687,7 @@ struct MediaEditorView: View {
                 PanelWidthGrip(width: $inspectorWidth)
             }
         }
+        .padding([.trailing, .bottom], standalone ? CornerStandard.panelInset : 0)
         .navigationTitle(entry.name)
         .task(id: entry.id) {
             nameDraft = entry.name

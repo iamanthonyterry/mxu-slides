@@ -309,6 +309,13 @@ struct MxUSlidesApp: App {
         }
         .defaultSize(width: 640, height: 380)
 
+        Window("Media Preview", id: "mediaPreview") {
+            if let appModel {
+                MediaPreviewWindowView(model: appModel)
+            }
+        }
+        .defaultSize(width: 900, height: 540)
+
         Window("Screen Configuration", id: "outputs") {
             if presentLayout.runOnly {
                 RunOnlyLockedPlaceholder(surface: "Screen Configuration")

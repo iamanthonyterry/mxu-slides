@@ -108,6 +108,13 @@ final class AppModel {
             syncingSelection = true
             defer { syncingSelection = false }
             selectedEntryIDs = newValue
+            if browsesBesideEditor(newValue) {
+                if let first = newValue.first,
+                   newValue.count == 1 || !(mediaPreviewEntryID.map(newValue.contains) ?? false) {
+                    mediaPreviewEntryID = first
+                }
+                return
+            }
             if newValue.isEmpty {
                 selectedEntryID = nil
             } else if newValue.count == 1 {
@@ -120,6 +127,26 @@ final class AppModel {
             if protectEditorSelection, !newValue.isEmpty, let anchor = selectedEntryID {
                 retargetPresentReturn(entryID: anchor)
             }
+        }
+    }
+
+    private(set) var mediaPreviewEntryID: String?
+
+    private func browsesBesideEditor(_ ids: Set<String>) -> Bool {
+        guard protectEditorSelection, let anchor = selectedEntryID,
+              let open = indexEntry(anchor), open.kind != .media, open.kind != .audio
+        else { return false }
+        if ids.isEmpty { return selectedSection.isBrowseOnly }
+        return ids.allSatisfy { id in
+            indexEntry(id).map { $0.kind == .media || $0.kind == .audio } ?? false
+        }
+    }
+
+    func closeMediaPreview() {
+        guard let id = mediaPreviewEntryID else { return }
+        mediaPreviewEntryID = nil
+        if selectedEntryIDs == [id], selectedEntryID != id {
+            selectedEntryIDs = selectedEntryID.map { [$0] } ?? []
         }
     }
 
@@ -1840,6 +1867,9 @@ final class AppModel {
             sweepMediaPosters()
         }
         let deleted = Set(entries.map(\.id))
+        if let id = mediaPreviewEntryID, deleted.contains(id) {
+            mediaPreviewEntryID = nil
+        }
         if let id = selectedEntryID, deleted.contains(id) {
             selectedEntryID = nil
         } else {

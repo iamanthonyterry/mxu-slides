@@ -649,6 +649,9 @@ struct ShellView: View {
         .onChange(of: model.selectedEntryID) { _, entryID in
             adoptSelectedService(entryID)
         }
+        .onChange(of: model.mediaPreviewEntryID) { old, new in
+            if old == nil, new != nil { openWindow(id: "mediaPreview") }
+        }
         .alert(
             "Rename Service",
             isPresented: Binding(
