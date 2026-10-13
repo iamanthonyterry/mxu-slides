@@ -359,7 +359,10 @@ struct LibrarySidebar: View {
         let cloudHits = cloudSearchHits.filter { item in
             searchScopes.isEmpty || searchScopes.contains { $0.kind == item.kind }
         }
-        List(selection: $model.selectedEntryID) {
+        List(selection: Binding(
+            get: { model.selectedEntryIDs.count == 1 ? model.selectedEntryIDs.first : model.selectedEntryID },
+            set: { model.librarySelection = $0.map { [$0] } ?? [] }
+        )) {
             ForEach(TeamDriveLogic.searchRows(hits: hits, cloud: cloudHits, query: searchText)) { row in
                 switch row {
                 case .hit(let hit):
