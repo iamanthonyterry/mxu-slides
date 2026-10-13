@@ -718,7 +718,7 @@ struct ActionCombosModule: View {
                     updateAction(comboID, action.id) { $0.audioRepeat = false }
                 }
             }
-        case .clearAll, .clearAudio, .clearSignage, .dismissAlert:
+        case .clearAll, .clearAudio, .clearSignage, .clearInk, .hideInk, .showInk, .dismissAlert:
             EmptyView()
         }
     }
@@ -786,7 +786,7 @@ struct ActionCombosModule: View {
 
     private func hasParameters(_ kind: SlideActionKind) -> Bool {
         switch kind {
-        case .clearAll, .clearAudio, .clearSignage, .dismissAlert: false
+        case .clearAll, .clearAudio, .clearSignage, .clearInk, .hideInk, .showInk, .dismissAlert: false
 
         case .midiOut: true
         default: true
