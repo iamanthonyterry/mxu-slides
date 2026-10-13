@@ -881,6 +881,14 @@ struct MediaEditorView: View {
                 Text("Background").tag(MediaClassification.background)
                 Text("Foreground").tag(MediaClassification.foreground)
             }
+            Picker("Layer", selection: mediaBinding(item, \.layerId)) {
+                Text("Automatic").tag(String?.none)
+                Divider()
+                ForEach(model.layerStack.topDown, id: \.id) { layer in
+                    Text(layer.name).tag(String?.some(layer.id))
+                }
+            }
+            .help("The layer this plays on when fired from the library. Automatic picks one from its classification")
             if item.mediaKind == .video {
                 Toggle("Loops", isOn: mediaBinding(item, \.loops))
                 playRatePicker(item)

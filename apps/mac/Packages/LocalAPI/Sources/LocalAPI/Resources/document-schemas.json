@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 132,
+  "schemaVersion": 133,
   "schemas": {
     "SlideObjectKind": {
       "type": "string",
@@ -1101,15 +1101,72 @@
         "layer": {
           "$ref": "#/components/schemas/CueMediaLayer"
         },
+        "layerId": {
+          "type": "string"
+        },
         "loops": {
           "type": "boolean"
         },
         "classification": {
           "$ref": "#/components/schemas/MediaClassification"
+        },
+        "scaleMode": {
+          "$ref": "#/components/schemas/MediaScaleMode"
         }
       },
       "required": [
         "mediaId"
+      ]
+    },
+    "ShowLayer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "aboveSlide": {
+          "type": "boolean"
+        },
+        "opacity": {
+          "type": "number"
+        },
+        "blendMode": {
+          "$ref": "#/components/schemas/BlendMode"
+        },
+        "scaleMode": {
+          "$ref": "#/components/schemas/MediaScaleMode"
+        },
+        "transition": {
+          "$ref": "#/components/schemas/Transition"
+        },
+        "colorHex": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "LayerStack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ShowLayer"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "layers"
       ]
     },
     "Slide": {
@@ -1129,6 +1186,12 @@
         },
         "background": {
           "$ref": "#/components/schemas/CueMedia"
+        },
+        "layerMedia": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CueMedia"
+          }
         },
         "backgroundFill": {
           "$ref": "#/components/schemas/ObjectFill"
@@ -1519,6 +1582,9 @@
         },
         "autoAdvance": {
           "$ref": "#/components/schemas/AutoAdvance"
+        },
+        "layerId": {
+          "type": "string"
         }
       },
       "required": [
@@ -2135,6 +2201,42 @@
         "enabledLayers"
       ]
     },
+    "LayerTarget": {
+      "type": "object",
+      "properties": {
+        "targetKind": {
+          "$ref": "#/components/schemas/OutputTargetKind"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/components/schemas/MediaSourceRect"
+        }
+      },
+      "required": [
+        "targetKind",
+        "targetId"
+      ]
+    },
+    "LayerSpan": {
+      "type": "object",
+      "properties": {
+        "layerId": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/LayerTarget"
+          }
+        }
+      },
+      "required": [
+        "layerId",
+        "targets"
+      ]
+    },
     "OutputPreset": {
       "type": "object",
       "properties": {
@@ -2148,6 +2250,12 @@
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/OutputAssignment"
+          }
+        },
+        "layerSpans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/LayerSpan"
           }
         }
       },

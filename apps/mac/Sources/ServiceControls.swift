@@ -1070,7 +1070,10 @@ final class ServiceControls {
         context: MediaFireContext = .direct
     ) -> LayerKind {
 
-        let layer = SlideSceneBuilder.layerKind(CueMedia.dropped(for: mediaItem).layer)
+        let chosen = mediaItem.layerId.flatMap { appModel.layerStack.layer($0)?.id }
+        let ownLayer = chosen.flatMap { LayerKind(rawValue: $0) == nil ? $0 : nil }
+        let layer = chosen.flatMap(LayerKind.init(rawValue:))
+            ?? SlideSceneBuilder.layerKind(CueMedia.dropped(for: mediaItem).layer)
 
         guard !appModel.isMediaFileMissing(mediaItem) else {
             DiagnosticsStore.shared.note("media.fire.missingFile", detail: mediaItem.name)
@@ -1086,13 +1089,17 @@ final class ServiceControls {
         actionRouter?.applyPresetSwitches(forMedia: mediaItem, contextID: contextID)
 
         if let own = RenderContext.sceneTransition(from: mediaItem.transition) {
-            render.nextLiveTransitions[layer] = own
+            if let ownLayer {
+                render.nextLayerTransitions[ownLayer] = own
+            } else {
+                render.nextLiveTransitions[layer] = own
+            }
         }
         state.fire(
             media: CueMedia(
                 mediaId: mediaItem.id, loops: loopsOverride,
                 classification: mediaItem.classification),
-            on: layer)
+            onLayer: ownLayer ?? layer.rawValue)
         apply()
 
         if mediaItem.classification != .background {
@@ -1302,6 +1309,37 @@ final class ServiceControls {
         if layer == .alerts { syncFlashClock() }
     }
 
+    func clear(layerID: String) {
+        if let layer = LayerKind(rawValue: layerID) { return clear(layer: layer) }
+        settlePending()
+        if let cue = state.liveLayerMedia[layerID], let item = appModel.media(cue.mediaId),
+           let own = RenderContext.sceneTransition(from: item.transition) {
+            render.nextLayerTransitions[layerID] = own
+        }
+        state.clear(layerId: layerID, atHostTime: CACurrentMediaTime())
+        apply()
+    }
+
+    func hasContent(layerID: String) -> Bool {
+        LayerKind(rawValue: layerID).map { hasContent(layer: $0) } ?? (state.liveLayerMedia[layerID] != nil)
+    }
+
+    var ownLayers: [ShowLayer] {
+        appModel.layerStack.topDown.filter { !$0.isBuiltIn }
+    }
+
+    private var layerSpans: [String: LayerSpan] = [:]
+
+    func setLayerSpans(_ spans: [String: LayerSpan]) {
+        guard spans != layerSpans else { return }
+        layerSpans = spans
+        apply()
+    }
+
+    func layersChanged() {
+        if state.layerStack != appModel.layerStack { apply() }
+    }
+
     static let clearAllIncludesAudioKey = "serviceControls.clearAllIncludesAudio"
 
     func clearAll(protecting: Set<LayerKind> = [], cancelsPendingActions: Bool = true) {
@@ -1329,7 +1367,7 @@ final class ServiceControls {
     func hasContent(function: ShowFunction) -> Bool {
         switch function {
         case .slides: state.liveSlide != nil
-        case .media: !state.liveMedia.isEmpty
+        case .media: !state.liveMedia.isEmpty || !state.liveLayerMedia.isEmpty
         case .overlays: !state.liveOverlays.isEmpty
         case .audio: !state.liveAudio.isEmpty
         case .alerts: state.liveAlert != nil
@@ -1361,6 +1399,7 @@ final class ServiceControls {
 
     func isMediaLive(_ mediaID: String) -> Bool {
         state.liveMedia.values.contains { $0.mediaId == mediaID }
+            || state.liveLayerMedia.values.contains { $0.mediaId == mediaID }
     }
 
     private(set) var nextSlideInfo: ConfidenceInfo.SlideText?
@@ -1517,6 +1556,14 @@ final class ServiceControls {
             state.pageTurn = pageTurn
         }
 
+        let stack = appModel.layerStack
+        if state.layerStack != stack {
+            state.layerStack = stack
+        }
+        render.layerTransitions = stack.layers.reduce(into: [:]) { transitions, layer in
+            transitions[layer.id] = layer.transition.flatMap { RenderContext.sceneTransition(from: $0) }
+        }
+
         pushConfidence()
         let now = Date()
         let base = state.scene(
@@ -1535,7 +1582,27 @@ final class ServiceControls {
             )
             .applyingMediaEffects { appModel.mediaSceneEffects(id: $0) }
         }
-        render.setLiveScenes(base, variants: variants)
+        var screens: [String: RenderScene] = [:]
+        let screenTargets = render.liveScreenTargets
+            .union(render.screenTargets(shapedUnlike: base.canvasSize))
+            .union(LayerSpans.targets(of: layerSpans))
+        for target in screenTargets {
+            screens[target] = state.scene(
+                alertVisible: alertVisible,
+                linkedText: render.confidenceInfo,
+                slideThemeOverride: screenLooks[target].flatMap { slideThemeOverrides[$0] },
+                at: now
+            )
+            .fitted(toScreen: render.screenSize(target))
+            .spanning(layerSpans, onScreen: target) { id in
+                appModel.media(id).flatMap { item in
+                    guard let width = item.pixelWidth, let height = item.pixelHeight else { return nil }
+                    return CGSize(width: width, height: height)
+                }
+            }
+            .applyingMediaEffects { appModel.mediaSceneEffects(id: $0) }
+        }
+        render.setLiveScenes(base, variants: variants, screens: screens, screenLooks: screenLooks)
         syncMedia()
         syncLinkedTextClock()
         syncExitSweep()
@@ -1545,8 +1612,11 @@ final class ServiceControls {
 
     private var slideThemeOverrides: [String: Theme] = [:]
 
-    func setSlideThemeOverrides(_ overrides: [String: Theme]) {
-        guard overrides != slideThemeOverrides else { return }
+    private var screenLooks: [String: String] = [:]
+
+    func setSlideThemeOverrides(_ overrides: [String: Theme], screenLooks looks: [String: String] = [:]) {
+        guard overrides != slideThemeOverrides || looks != screenLooks else { return }
+        screenLooks = looks
         slideThemeOverrides = overrides
 
         state.slideThemeOverrides = overrides.sorted { $0.key < $1.key }.map(\.value)

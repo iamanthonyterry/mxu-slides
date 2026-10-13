@@ -509,6 +509,8 @@ struct SlideGridBody: View {
 
     @State private var backgroundDropIndex: Int?
 
+    @State private var layerDrops: [PendingLayerDrop] = []
+
     @State private var mediaActionTarget: MediaActionTarget?
 
     @State private var actionEditorSlide: Slide?
@@ -1022,6 +1024,88 @@ struct SlideGridBody: View {
     }
 
     @ViewBuilder
+    private func layerMediaMenus(slide: Slide) -> some View {
+        let stack = model.layerStack
+        let entries = stack.layerCues(of: slide)
+        ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+            let mediaID = entry.cue.mediaId
+            let layerID = entry.layer.id
+            Menu(model.media(mediaID)?.name ?? "Missing Media") {
+                if model.media(mediaID) != nil, !mediaID.contains("::") {
+                    MediaCueMenuItems(
+                        model: model, actionRouter: actionRouter,
+                        mediaID: mediaID, state: mediaMenuState,
+                        includesCueGrammar: false
+                    )
+                    Divider()
+                }
+                Menu("Layer") {
+                    if let item = model.media(mediaID) {
+                        Toggle("Default", isOn: Binding(
+                            get: { false },
+                            set: { _ in
+                                let background = CueMedia.droppedOnSlide(for: item)
+                                editLayerMedia(of: slide, undoLabel: "Move to Default") {
+                                    $0.removeLayerMedia(mediaID, onLayer: layerID, in: stack)
+                                    $0.background = background
+                                }
+                            }
+                        ))
+                    }
+                    ForEach(stack.topDown.filter { !$0.isBuiltIn || $0.id == layerID }, id: \.id) { layer in
+                        Toggle(layer.name, isOn: Binding(
+                            get: { layer.id == layerID },
+                            set: { _ in
+                                editLayerMedia(of: slide, undoLabel: "Move Layer Media") {
+                                    $0.moveLayerMedia(mediaID, fromLayer: layerID, toLayer: layer.id, in: stack)
+                                }
+                            }
+                        ))
+                    }
+                }
+                Menu("Plays") {
+                    Toggle("Until Replaced", isOn: Binding(
+                        get: { entry.cue.mode != .slideOnly },
+                        set: { _ in
+                            editLayerMedia(of: slide, undoLabel: "Layer Media Plays") {
+                                $0.editLayerMedia(mediaID, onLayer: layerID, in: stack) { $0.mode = nil }
+                            }
+                        }
+                    ))
+                    Toggle("This Slide Only", isOn: Binding(
+                        get: { entry.cue.mode == .slideOnly },
+                        set: { _ in
+                            editLayerMedia(of: slide, undoLabel: "Layer Media Plays") {
+                                $0.editLayerMedia(mediaID, onLayer: layerID, in: stack) { $0.mode = .slideOnly }
+                            }
+                        }
+                    ))
+                }
+                if model.media(mediaID)?.mediaKind == .video {
+                    Toggle("Loop", isOn: Binding(
+                        get: { entry.cue.loops ?? true },
+                        set: { loops in
+                            editLayerMedia(of: slide, undoLabel: "Layer Media Loop") {
+                                $0.editLayerMedia(mediaID, onLayer: layerID, in: stack) { $0.loops = loops }
+                            }
+                        }
+                    ))
+                }
+                Divider()
+                Button("Remove from Slide", role: .destructive) {
+                    editLayerMedia(of: slide, undoLabel: "Remove Layer Media") {
+                        $0.removeLayerMedia(mediaID, onLayer: layerID, in: stack)
+                    }
+                }
+            }
+        }
+    }
+
+    private func editLayerMedia(of slide: Slide, undoLabel: String, _ mutate: @escaping @Sendable (inout Slide) -> Void) {
+        model.updateSlide(presentationID: presentation.id, slideID: slide.id, undoLabel: undoLabel, mutate)
+    }
+
+    @ViewBuilder
     private func singleMenu(slide: Slide) -> some View {
 
         Button("Edit…") {
@@ -1044,8 +1128,29 @@ struct SlideGridBody: View {
                     mediaID: mediaID, state: mediaMenuState,
                     includesCueGrammar: false
                 )
+                let ownLayers = model.layerStack.topDown.filter { !$0.isBuiltIn }
+                if slide.background?.mediaId == mediaID, let item = model.media(mediaID), !ownLayers.isEmpty {
+                    Divider()
+                    Menu("Layer") {
+                        Toggle("Default", isOn: .constant(true))
+                        ForEach(ownLayers, id: \.id) { layer in
+                            Toggle(layer.name, isOn: Binding(
+                                get: { false },
+                                set: { _ in
+                                    let stack = model.layerStack
+                                    editLayerMedia(of: slide, undoLabel: "Move to Layer") {
+                                        $0.background = nil
+                                        $0.send(item, toLayer: layer.id, in: stack)
+                                    }
+                                }
+                            ))
+                        }
+                    }
+                }
             }
         }
+
+        layerMediaMenus(slide: slide)
 
         Menu("Add Action") {
             AddActionMenuItems(
@@ -1171,6 +1276,9 @@ struct SlideGridBody: View {
         }
         .draggablePayload(runOnly ? nil : SlideBulkEdit.slideDragPayload(
             presentationID: presentation.id, slideID: slide.id))
+        .popover(item: layerDropBinding(for: slide), arrowEdge: .bottom) { drop in
+            layerDropChooser(drop)
+        }
 
         .onDrop(of: [.plainText, .fileURL], delegate: GutterDropDelegate(
             enabled: !runOnly,
@@ -1306,8 +1414,64 @@ struct SlideGridBody: View {
         if insertZone {
             return insertMediaSlides(mediaIDs: [payload], beforeIndex: index)
         }
+        if model.media(payload) != nil, asksWhereDroppedMediaGoes(slide) {
+            let drop = PendingLayerDrop(mediaID: payload, slideID: slide.id)
+
+            Task { @MainActor in layerDrops.append(drop) }
+            return true
+        }
         return model.setSlideBackground(
             presentationID: presentation.id, slideID: slide.id, mediaID: payload)
+    }
+
+    private func asksWhereDroppedMediaGoes(_ slide: Slide) -> Bool {
+        !model.ownLayers.isEmpty || slide.background?.mediaId.isEmpty == false
+            || !(slide.layerMedia ?? []).isEmpty
+    }
+
+    private func layerDropBinding(for slide: Slide) -> Binding<PendingLayerDrop?> {
+        let current = layerDrops.first.flatMap { $0.slideID == slide.id ? $0 : nil }
+        return Binding(
+            get: { current },
+            set: { shown in
+                if shown == nil, let current, layerDrops.first?.id == current.id { layerDrops = [] }
+            }
+        )
+    }
+
+    private func layerDropChooser(_ drop: PendingLayerDrop) -> some View {
+        let stack = model.layerStack
+        let slide = model.presentation(presentation.id)?.slides.first { $0.id == drop.slideID }
+        let current = slide?.background.flatMap { $0.mediaId.isEmpty ? nil : model.media($0.mediaId) }
+        var replacing: [String: String] = [:]
+        for entry in slide.map({ stack.layerCues(of: $0) }) ?? [] {
+            replacing[entry.layer.id] = model.media(entry.cue.mediaId)?.name ?? "Missing media"
+        }
+        return LayerDropChooser(
+            model: model, mediaID: drop.mediaID,
+            slideTitle: current.map {
+                "Replace the Current \($0.mediaKind == .video ? "Video" : "Image") (\u{201C}\($0.name)\u{201D})"
+            } ?? "As the Background",
+            layersTitle: "Add to a Layer", replacing: replacing,
+            pick: { resolveLayerDrop(drop, $0) },
+            cancel: { layerDrops = [] }
+        )
+    }
+
+    private func resolveLayerDrop(_ drop: PendingLayerDrop, _ choice: LayerDropChoice) {
+        layerDrops.removeAll { $0.id == drop.id }
+        guard let item = model.media(drop.mediaID) else { return }
+        let stack = model.layerStack
+        switch choice {
+        case .slide:
+            _ = model.setSlideBackground(presentationID: presentation.id, slideID: drop.slideID, mediaID: item.id)
+        case .layer(let layerID):
+            model.updateSlide(
+                presentationID: presentation.id, slideID: drop.slideID, undoLabel: "Add Layer Media"
+            ) { target in
+                target.send(item, toLayer: layerID, in: stack)
+            }
+        }
     }
 
     private func appendSlideAction(_ action: SlideAction, to slide: Slide) {
@@ -1368,14 +1532,20 @@ struct SlideGridBody: View {
         backgroundDropIndex = nil
         guard !runOnly, !urls.isEmpty else { return }
         let slideID = slide.id
+        let presentationID = presentation.id
         Task { @MainActor in
 
             let imported = await model.importFiles(urls)
             if insertZone {
                 _ = insertMediaSlides(mediaIDs: imported, beforeIndex: index)
+            } else if asksWhereDroppedMediaGoes(
+                model.presentation(presentationID)?.slides.first { $0.id == slideID } ?? slide
+            ) {
+                layerDrops += imported.filter { model.media($0) != nil }
+                    .map { PendingLayerDrop(mediaID: $0, slideID: slideID) }
             } else if let first = imported.first {
                 _ = model.setSlideBackground(
-                    presentationID: presentation.id, slideID: slideID, mediaID: first)
+                    presentationID: presentationID, slideID: slideID, mediaID: first)
             }
         }
     }
@@ -1898,7 +2068,7 @@ func slideActionLabel(
     case .switchOutputPreset:
         "Switch Output Preset: \(entryName(action.presetId))"
     case .clearLayer:
-        "Clear \(action.layer.flatMap(LayerKind.init(rawValue:))?.displayName ?? "Layer")"
+        "Clear \(model.layerName(action.layer) ?? "Layer")"
     case .clearAll: "Clear All"
     case .clearAudio: "Clear Music"
     case .clearSignage: "Clear Signage"
@@ -1990,6 +2160,12 @@ struct SlideThumbnailView: View {
 
         let missing = SlideSceneBuilder.fireMediaPosterIDs(slide: slide) { model.media($0).map { ($0.mediaKind, $0.classification) } }
             .below.filter { model.media($0) == nil }
+
+        let carriedLayers = [LayerKind.loopingVideos, .stillGraphics, .videos]
+            .compactMap { kind in shown[kind].map { (layerId: kind.rawValue, mediaId: $0) } }
+        let columns = LayerMediaColumns.columns(model: model, render: render, slide: slide, carried: carriedLayers)
+        let ownColumns = columns.filter { entry in !carriedLayers.contains { $0.layerId == entry.layer.id && $0.mediaId == entry.mediaId } }
+        let split = columns.count > 1
         ZStack {
             if transparencyGrid {
 
@@ -1998,15 +2174,16 @@ struct SlideThumbnailView: View {
                 themeBackground
             }
 
-            ForEach([LayerKind.loopingVideos, .stillGraphics].compactMap { shown[$0] } + missing, id: \.self) { id in
+            ForEach((split ? [] : [LayerKind.loopingVideos, .stillGraphics].compactMap { shown[$0] }) + missing, id: \.self) { id in
                 posterLayer(mediaId: id)
             }
+            LayerMediaColumns(model: model, columns: split ? columns : ownColumns)
             if let content = contentImage() {
                 Image(decorative: content, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
-            if let id = shown[.videos] {
+            if !split, let id = shown[.videos] {
                 posterLayer(mediaId: id)
             }
         }
@@ -2020,11 +2197,13 @@ struct SlideThumbnailView: View {
                     .tileHelp("This slide sets the background")
             }
         }
+
     }
 
     private var declaredMediaIDs: Set<String> {
         var ids = Set((slide.actions ?? []).filter { $0.kind == .fireMedia }.compactMap(\.mediaId))
         if let own = slide.background?.mediaId, !own.isEmpty { ids.insert(own) }
+        ids.formUnion((slide.layerMedia ?? []).map(\.mediaId))
         return ids
     }
 

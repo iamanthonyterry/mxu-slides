@@ -21,6 +21,7 @@ public enum DocumentKind: String, CaseIterable, Sendable {
     case signageBoard
     case effectPresetBoard
     case animationPresetBoard
+    case layerStack
     case midiDevice
     case importLedger
     case serviceLinkRules
@@ -61,6 +62,7 @@ public enum DocumentKind: String, CaseIterable, Sendable {
         case .signageBoard: "signage"
         case .effectPresetBoard: "effect-presets"
         case .animationPresetBoard: "animation-presets"
+        case .layerStack: "layer-stack"
         case .midiDevice: "midi-devices"
         case .importLedger: "import-ledger"
         case .serviceLinkRules: "service-link-rules"
@@ -249,6 +251,12 @@ extension AnimationPresetBoard: DocumentEntity {
 public extension AnimationPresetBoard {
 
     static let wellKnownID = "animation-preset-board"
+}
+
+extension LayerStack: DocumentEntity {
+    public static var documentKind: DocumentKind { .layerStack }
+
+    public var name: String { "Layers" }
 }
 
 extension MIDIDevice: DocumentEntity {

@@ -321,6 +321,7 @@ public final class ResidentLibrary {
     public let signageBoards: ResidentDocuments<SignageBoard>
     public let effectPresetBoards: ResidentDocuments<EffectPresetBoard>
     public let animationPresetBoards: ResidentDocuments<AnimationPresetBoard>
+    public let layerStacks: ResidentDocuments<LayerStack>
     public let serviceLinkRules: ResidentDocuments<ServiceLinkRules>
     public let slideBuildingSettings: ResidentDocuments<SlideBuildingSettings>
     public let outputPresets: ResidentDocuments<OutputPreset>
@@ -333,7 +334,7 @@ public final class ResidentLibrary {
         .alertPreset, .streamRecordPreset, .streamDestination, .actionCombo,
         .scheduleTrigger, .confidenceLayout, .schedulerBoard,
         .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard,
-        .animationPresetBoard, .serviceLinkRules, .slideBuildingSettings, .outputPreset, .midiDevice,
+        .animationPresetBoard, .layerStack, .serviceLinkRules, .slideBuildingSettings, .outputPreset, .midiDevice,
     ]
 
     public convenience init(store: DocumentStore, epochs: DocumentKindVersions, fills: DocumentKindVersions) {
@@ -359,6 +360,7 @@ public final class ResidentLibrary {
         signageBoards = .init(source: source, epochs: epochs, fills: fills)
         effectPresetBoards = .init(source: source, epochs: epochs, fills: fills)
         animationPresetBoards = .init(source: source, epochs: epochs, fills: fills)
+        layerStacks = .init(source: source, epochs: epochs, fills: fills)
         serviceLinkRules = .init(source: source, epochs: epochs, fills: fills)
         slideBuildingSettings = .init(source: source, epochs: epochs, fills: fills)
         outputPresets = .init(source: source, epochs: epochs, fills: fills)
@@ -368,7 +370,7 @@ public final class ResidentLibrary {
             alertPresets, streamPresets, streamDestinations, actionCombos,
             scheduleTriggers, confidenceLayouts, schedulerBoards,
             controlBoards, groupPalettes, signageBoards, effectPresetBoards,
-            animationPresetBoards, serviceLinkRules, slideBuildingSettings, outputPresets, midiDevices,
+            animationPresetBoards, layerStacks, serviceLinkRules, slideBuildingSettings, outputPresets, midiDevices,
         ]
     }
 

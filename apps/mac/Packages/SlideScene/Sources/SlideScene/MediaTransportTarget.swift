@@ -105,6 +105,11 @@ extension ShowState {
                 : (direct ? .backgroundServiceItem : .backgroundCue)
             seeds.append(TransportSeed(mediaID: media.mediaId, layer: layer, origin: origin))
         }
+        for id in liveLayerMedia.keys.sorted() {
+            guard let media = liveLayerMedia[id], !media.mediaId.isEmpty,
+                  seen.insert(media.mediaId).inserted else { continue }
+            seeds.append(TransportSeed(mediaID: media.mediaId, layer: .videos, origin: .backgroundCue))
+        }
         if let live = liveSlide {
             var objects = live.slide.objects
             if let template = SlideSceneBuilder.themeSlide(for: live.slide, theme: live.theme) {

@@ -1350,6 +1350,17 @@ struct SlideEditorView: View {
     }
 
     @ViewBuilder
+    private func layerDropBinding(_ model: SlideEditorModel) -> Binding<PendingLayerDrop?> {
+        let current = model.layerDrops.first
+        return Binding(
+            get: { current },
+            set: { shown in
+                if shown == nil, let current, model.layerDrops.first?.id == current.id { model.layerDrops = [] }
+            }
+        )
+    }
+
+    @ViewBuilder
     private func canvas(_ model: SlideEditorModel) -> some View {
         if let render {
             ZStack {
@@ -1390,6 +1401,19 @@ struct SlideEditorView: View {
                     }
                 }
 
+                .popover(
+                    item: layerDropBinding(model),
+                    attachmentAnchor: .point(.center)
+                ) { drop in
+                    LayerDropChooser(
+                        model: model.appModel, mediaID: drop.mediaID,
+                        slideTitle: "On the Slide", layersTitle: "On a Layer",
+                        replacing: model.layerDropReplacements,
+                        pick: { model.resolveLayerDrop(drop, $0) },
+                        cancel: { model.layerDrops = [] }
+                    )
+                }
+
                 .onDrop(
                     of: [.plainText, .fileURL],
                     delegate: CanvasDropDelegate(
@@ -1399,7 +1423,7 @@ struct SlideEditorView: View {
                         setTargeted: { canvasDropTargeted = $0 },
                         performText: { payload, point in
                             guard !payload.contains("::") else { return false }
-                            return model.dropMediaObject(mediaID: payload, at: point)
+                            return model.dropMedia(mediaID: payload, at: point)
                         },
                         performFiles: { urls, point in
                             model.dropFiles(urls, at: point)

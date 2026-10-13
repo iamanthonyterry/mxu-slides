@@ -417,11 +417,16 @@ struct ActionCombosModule: View {
     private func parameterChip(_ comboID: String, _ action: SlideAction) -> some View {
         switch action.kind {
         case .clearLayer:
-            QuietMenuChip(title: action.layer.flatMap(LayerKind.init(rawValue:))?.displayName ?? "Layer\u{2026}") {
+            QuietMenuChip(title: model.layerName(action.layer) ?? "Layer\u{2026}") {
 
                 ForEach(LayerKind.allCases.reversed(), id: \.rawValue) { layer in
                     Button(layer.displayName) {
                         updateAction(comboID, action.id) { $0.layer = layer.rawValue }
+                    }
+                }
+                ForEach(model.ownLayers, id: \.id) { layer in
+                    Button(layer.name) {
+                        updateAction(comboID, action.id) { $0.layer = layer.id }
                     }
                 }
             }

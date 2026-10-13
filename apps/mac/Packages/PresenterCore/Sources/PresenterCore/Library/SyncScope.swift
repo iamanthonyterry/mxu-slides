@@ -9,7 +9,7 @@ public enum SyncScope: String, Codable, CaseIterable, Sendable {
         switch kind {
         case .presentation, .service, .theme, .media, .audio, .playlist, .overlay,
              .alertPreset, .actionCombo, .scheduleTrigger, .confidenceLayout, .groupPalette,
-             .effectPresetBoard, .animationPresetBoard, .serviceLinkRules, .note, .slideBuildingSettings, .font:
+             .effectPresetBoard, .animationPresetBoard, .layerStack, .serviceLinkRules, .note, .slideBuildingSettings, .font:
             .team
         case .outputPreset, .controlBoard, .schedulerBoard, .signageBoard, .midiDevice,
              .streamDestination, .streamRecordPreset, .stationSettings, .workspaceSettings:
@@ -49,6 +49,7 @@ public enum SyncScope: String, Codable, CaseIterable, Sendable {
         case .signageBoard: SignageBoard.self
         case .effectPresetBoard: EffectPresetBoard.self
         case .animationPresetBoard: AnimationPresetBoard.self
+        case .layerStack: LayerStack.self
         case .midiDevice: MIDIDevice.self
         case .importLedger: ImportLedger.self
         case .serviceLinkRules: ServiceLinkRules.self

@@ -1780,7 +1780,7 @@ final class AppModel {
         case .midiDevice: modify(MIDIDevice.self, id: entry.id) { $0.name = trimmed }
         case .streamDestination: modify(StreamDestination.self, id: entry.id) { $0.name = trimmed }
         case .note: return 
-        case .schedulerBoard, .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard, .animationPresetBoard, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: break 
+        case .schedulerBoard, .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard, .animationPresetBoard, .layerStack, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: break 
         }
 
         let oldName = entry.name
@@ -2071,7 +2071,7 @@ final class AppModel {
         case .note: break 
 
         case .streamDestination: copy(StreamDestination.self) { $0.id = newID; $0.name += " Copy" }
-        case .schedulerBoard, .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard, .animationPresetBoard, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: break 
+        case .schedulerBoard, .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard, .animationPresetBoard, .layerStack, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: break 
         }
     }
 
@@ -2752,6 +2752,23 @@ final class AppModel {
         updateEffectPresetBoard { board in
             board.presets.removeAll { $0.id == id }
         }
+    }
+
+    var layerStack: LayerStack {
+        resident.layerStacks.value(LayerStack.wellKnownID) ?? .standard
+    }
+
+    var ownLayers: [ShowLayer] { layerStack.topDown.filter { !$0.isBuiltIn } }
+
+    func layerName(_ id: String?) -> String? {
+        guard let id, !id.isEmpty else { return nil }
+        return LayerKind(rawValue: id)?.displayName ?? layerStack.layer(id)?.name
+    }
+
+    func updateLayerStack(_ mutate: @escaping @Sendable (inout LayerStack) -> Void) {
+        updateWellKnown(
+            LayerStack.self, id: LayerStack.wellKnownID, failure: "layerStack.saveFailed",
+            orMake: { LayerStack.standard }, mutate)
     }
 
     var animationPresetBoard: AnimationPresetBoard {

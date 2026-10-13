@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 132,
+  "schemaVersion": 133,
   "types": {
     "SlideObjectKind": {
       "kind": "enum",
@@ -1380,6 +1380,11 @@
           "optional": true
         },
         {
+          "name": "layerId",
+          "type": "string",
+          "optional": true
+        },
+        {
           "name": "loops",
           "type": "bool",
           "optional": true
@@ -1388,6 +1393,67 @@
           "name": "classification",
           "type": "MediaClassification",
           "optional": true
+        },
+        {
+          "name": "scaleMode",
+          "type": "MediaScaleMode",
+          "optional": true
+        }
+      ]
+    },
+    "ShowLayer": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "aboveSlide",
+          "type": "bool",
+          "optional": true
+        },
+        {
+          "name": "opacity",
+          "type": "double",
+          "optional": true
+        },
+        {
+          "name": "blendMode",
+          "type": "BlendMode",
+          "optional": true
+        },
+        {
+          "name": "scaleMode",
+          "type": "MediaScaleMode",
+          "optional": true
+        },
+        {
+          "name": "transition",
+          "type": "Transition",
+          "optional": true
+        },
+        {
+          "name": "colorHex",
+          "type": "string",
+          "optional": true
+        }
+      ]
+    },
+    "LayerStack": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "layers",
+          "type": "list:ShowLayer"
         }
       ]
     },
@@ -1409,6 +1475,11 @@
         {
           "name": "background",
           "type": "CueMedia",
+          "optional": true
+        },
+        {
+          "name": "layerMedia",
+          "type": "list:CueMedia",
           "optional": true
         },
         {
@@ -1871,6 +1942,11 @@
         {
           "name": "autoAdvance",
           "type": "AutoAdvance",
+          "optional": true
+        },
+        {
+          "name": "layerId",
+          "type": "string",
           "optional": true
         }
       ]
@@ -2538,6 +2614,37 @@
         }
       ]
     },
+    "LayerTarget": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "targetKind",
+          "type": "OutputTargetKind"
+        },
+        {
+          "name": "targetId",
+          "type": "string"
+        },
+        {
+          "name": "source",
+          "type": "MediaSourceRect",
+          "optional": true
+        }
+      ]
+    },
+    "LayerSpan": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "layerId",
+          "type": "string"
+        },
+        {
+          "name": "targets",
+          "type": "list:LayerTarget"
+        }
+      ]
+    },
     "OutputPreset": {
       "kind": "record",
       "fields": [
@@ -2552,6 +2659,11 @@
         {
           "name": "assignments",
           "type": "list:OutputAssignment"
+        },
+        {
+          "name": "layerSpans",
+          "type": "list:LayerSpan",
+          "optional": true
         }
       ]
     },

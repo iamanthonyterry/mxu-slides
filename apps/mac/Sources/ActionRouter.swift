@@ -312,6 +312,10 @@ final class ActionRouter {
     ) {
         switch action.kind {
         case .clearLayer:
+            if let id = action.layer, LayerKind(rawValue: id) == nil,
+               controls.ownLayers.contains(where: { $0.id == id }) {
+                return controls.clear(layerID: id)
+            }
             guard let layer = action.layer.flatMap(LayerKind.init(rawValue:)) else {
                 return miss(action, "layer")
             }

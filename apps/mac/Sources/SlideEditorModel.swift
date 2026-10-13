@@ -1291,11 +1291,42 @@ final class SlideEditorModel {
         let ids = await appModel.importFiles(urls)
         for (index, id) in ids.enumerated() {
             let offset = CGFloat(index) * 32
-            dropMediaObject(
-                mediaID: id,
-                at: CGPoint(x: scenePoint.x + offset, y: scenePoint.y + offset)
-            )
+            _ = dropMedia(mediaID: id, at: CGPoint(x: scenePoint.x + offset, y: scenePoint.y + offset))
         }
+    }
+
+    var offersLayersOnDrop: Bool {
+        if case .presentation = host { return !isMultiView && !appModel.ownLayers.isEmpty } else { return false }
+    }
+
+    var layerDrops: [PendingLayerDrop] = []
+
+    func dropMedia(mediaID: String, at scenePoint: CGPoint) -> Bool {
+        guard appModel.media(mediaID) != nil else { return false }
+        guard offersLayersOnDrop, let slideID = selectedSlideID else {
+            return dropMediaObject(mediaID: mediaID, at: scenePoint)
+        }
+        let drop = PendingLayerDrop(mediaID: mediaID, slideID: slideID, scenePoint: scenePoint)
+
+        Task { @MainActor [weak self] in self?.layerDrops.append(drop) }
+        return true
+    }
+
+    func resolveLayerDrop(_ drop: PendingLayerDrop, _ choice: LayerDropChoice) {
+        layerDrops.removeAll { $0.id == drop.id }
+        guard selectedSlideID == drop.slideID else { return }
+        switch choice {
+        case .slide: _ = dropMediaObject(mediaID: drop.mediaID, at: drop.scenePoint)
+        case .layer(let id): addLayerMedia(mediaID: drop.mediaID, onLayer: id)
+        }
+    }
+
+    var layerDropReplacements: [String: String] {
+        var replacing: [String: String] = [:]
+        for entry in documentSlide.map({ appModel.layerStack.layerCues(of: $0) }) ?? [] {
+            replacing[entry.layer.id] = appModel.media(entry.cue.mediaId)?.name ?? "Missing media"
+        }
+        return replacing
     }
 
     func addLiveInputObject() {
@@ -2149,6 +2180,37 @@ final class SlideEditorModel {
     func fillLoops(_ object: SlideObject) -> Bool {
         object.fill?.loops
             ?? (appModel.media(object.fill?.mediaId ?? "")?.loops ?? true)
+    }
+
+    var layerMedia: [CueMedia] { documentSlide?.layerMedia ?? [] }
+
+    var layerChoices: [ShowLayer] { appModel.layerStack.topDown }
+
+    func layerID(of cue: CueMedia) -> String { appModel.layerStack.resolvedLayerId(for: cue) }
+
+    func addLayerMedia(mediaID: String, onLayer layerID: String? = nil) {
+        guard !isThemeEditor, let slideID = selectedSlideID, let item = appModel.media(mediaID) else { return }
+        let stack = appModel.layerStack
+        updateSlide(slideID) { slide in
+            slide.send(item, toLayer: layerID ?? slide.openLayer(in: stack), in: stack)
+        }
+    }
+
+    func updateLayerMedia(at index: Int, _ mutate: (inout CueMedia) -> Void) {
+        guard let slideID = selectedSlideID else { return }
+        updateSlide(slideID) { slide in
+            guard slide.layerMedia?.indices.contains(index) == true else { return }
+            mutate(&slide.layerMedia![index])
+        }
+    }
+
+    func removeLayerMedia(at index: Int) {
+        guard let slideID = selectedSlideID else { return }
+        updateSlide(slideID) { slide in
+            guard slide.layerMedia?.indices.contains(index) == true else { return }
+            slide.layerMedia?.remove(at: index)
+            if slide.layerMedia?.isEmpty == true { slide.layerMedia = nil }
+        }
     }
 
     func backgroundMediaName(_ background: CueMedia) -> String {
@@ -3036,7 +3098,8 @@ final class SlideEditorModel {
             for: slide, theme: theme, presentation: shownPresentation,
             showThemeDecor: showsThemeContent,
             animationContext: animationPreviewContext(for: slide),
-            carriedMedia: carriedMedia(for: slide)
+            carriedMedia: carriedMedia(for: slide),
+            layerStack: appModel.layerStack
         ).applyingMediaEffects {
             appModel.mediaSceneEffects(id: $0)
         }.remappingMediaIDs {
@@ -3100,6 +3163,7 @@ final class SlideEditorModel {
         if let background = SlideSceneBuilder.effectiveBackground(slide: slide, presentation: presentation) {
             wanted.insert(background.mediaId)
         }
+        wanted.formUnion((slide.layerMedia ?? []).map(\.mediaId).filter { !$0.isEmpty })
 
         wanted.formUnion(carriedMedia(for: slide).values)
 

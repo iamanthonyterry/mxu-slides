@@ -34,7 +34,7 @@ struct InspectorView: View {
                     case .streamDestination: Text("Destinations are managed in Settings \u{203A} Stream & Record.")
                     case .note: EmptyView()
                     case .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard,
-                         .animationPresetBoard, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: EmptyView() 
+                         .animationPresetBoard, .layerStack, .importLedger, .serviceLinkRules, .stationSettings, .slideBuildingSettings, .font, .workspaceSettings: EmptyView() 
                     }
                 }
                 .formStyle(.grouped)

@@ -91,11 +91,16 @@ final class ThumbnailStore {
         var usedPlaceholder = false
         var pendingStill = false
 
-        let built = SlideSceneBuilder.peakLook(SlideSceneBuilder.scene(
+        var built = SlideSceneBuilder.peakLook(SlideSceneBuilder.scene(
             for: rendered, theme: theme, canvasSize: canvas, animationContext: .settled
         ))
 
             .applyingMediaEffects(mediaEffects)
+
+        // The tile draws layer and background media itself, as posters; left in, a loaded one paints the whole tile.
+        for index in built.layers.indices where built.layers[index].kind != .slide {
+            built.layers[index].items = []
+        }
 
         let slideLayerMedia = Self.mediaIDs(onSlideLayerOf: built)
         let scene = built.remappingMediaIDs { id in

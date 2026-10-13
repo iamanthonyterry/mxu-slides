@@ -62,6 +62,12 @@ public struct ShowState: Sendable, Equatable {
 
     public private(set) var liveMedia: [LayerKind: CueMedia] = [:]
 
+    public var layerStack: LayerStack = .standard
+
+    public private(set) var liveLayerMedia: [String: CueMedia] = [:]
+
+    public private(set) var slideOnlyLayers: Set<String> = []
+
     public private(set) var liveOverlays: [Overlay] = []
 
     public private(set) var liveAudio: [CueAudio] = []
@@ -123,10 +129,28 @@ public struct ShowState: Sendable, Equatable {
         slideExitAt = nil
         slideArrivedSettled = arrivesSettled
         slideDismissAt = nil
+
+        let cues = Dictionary(
+            (slide.layerMedia ?? []).filter { !$0.mediaId.isEmpty }.map { (layerStack.resolvedLayerId(for: $0), $0) },
+            uniquingKeysWith: { _, last in last })
+        for id in slideOnlyLayers where cues[id]?.mediaId != liveCue(onLayer: id)?.mediaId {
+            clear(layerId: id)
+        }
+        landBackground(slide: slide, presentation: presentation, arrangementId: arrangementId)
+        for (id, cue) in cues {
+            fire(media: cue, onLayer: id)
+            if cue.mode == .slideOnly { slideOnlyLayers.insert(id) }
+        }
+    }
+
+    private mutating func landBackground(slide: Slide, presentation: Presentation?, arrangementId: String?) {
         let background = SlideSceneBuilder.effectiveBackground(
             slide: slide, presentation: presentation, arrangementId: arrangementId
         )
-        let backgroundLayer = background.map { SlideSceneBuilder.layerKind($0.layer) }
+        let ownLayer = background.map { layerStack.resolvedLayerId(for: $0) }.flatMap {
+            LayerKind(rawValue: $0) == nil ? $0 : nil
+        }
+        let backgroundLayer = ownLayer == nil ? background.map { SlideSceneBuilder.layerKind($0.layer) } : nil
 
         for layer in [LayerKind.videos, .stillGraphics] where backgroundLayer != layer {
             if let live = liveMedia[layer], sweepsOnSlideFire(live, on: layer),
@@ -136,6 +160,10 @@ public struct ShowState: Sendable, Equatable {
                 liveMedia[layer] = nil
                 directMediaFires.remove(layer)
             }
+        }
+        if let background, let ownLayer {
+            fire(media: background, onLayer: ownLayer)
+            return
         }
         guard let background, let layer = backgroundLayer else { return }
         if liveMedia[layer]?.mediaId == background.mediaId { return }
@@ -161,9 +189,53 @@ public struct ShowState: Sendable, Equatable {
     }
 
     public mutating func fire(media: CueMedia, on layer: LayerKind) {
+        slideOnlyLayers.remove(layer.rawValue)
         if liveMedia[layer]?.mediaId == media.mediaId { return }
         liveMedia[layer] = media
         directMediaFires.insert(layer)
+    }
+
+    public mutating func fire(media: CueMedia, onLayer id: String) {
+        if let kind = LayerKind(rawValue: id) {
+            fire(media: media, on: kind)
+        } else {
+            slideOnlyLayers.remove(id)
+            if liveLayerMedia[id]?.mediaId != media.mediaId { liveLayerMedia[id] = media }
+        }
+    }
+
+    public func liveCue(onLayer id: String) -> CueMedia? {
+        LayerKind(rawValue: id).map { liveMedia[$0] } ?? liveLayerMedia[id]
+    }
+
+    public mutating func clear(layerId id: String, atHostTime: Double? = nil) {
+        if let kind = LayerKind(rawValue: id) {
+            clear(layer: kind, atHostTime: atHostTime)
+        } else {
+            liveLayerMedia[id] = nil
+            slideOnlyLayers.remove(id)
+        }
+    }
+
+    public static func renderLayers(for stack: LayerStack) -> [RenderLayer] {
+        let media: [LayerKind] = [.loopingVideos, .stillGraphics, .videos]
+        func layer(_ entry: ShowLayer) -> RenderLayer {
+            LayerKind(rawValue: entry.id).flatMap { media.contains($0) ? RenderLayer(kind: $0) : nil }
+                ?? RenderLayer(id: entry.id, kind: .videos, name: entry.name)
+        }
+        let reserved = Set(LayerKind.allCases.map(\.rawValue)).subtracting(media.map(\.rawValue))
+        let below = stack.belowSlide.filter { !reserved.contains($0.id) }.map(layer)
+        let above = stack.aboveSlide.filter { !reserved.contains($0.id) }.map(layer)
+        let placed = Set((below + above).map(\.id))
+        let missing = media.filter { !placed.contains($0.rawValue) }.map { RenderLayer(kind: $0) }
+        return [RenderLayer(kind: .videoInput)] + missing + below
+            + [RenderLayer(kind: .slide)] + above
+            + [RenderLayer(kind: .overlays), RenderLayer(kind: .alerts)]
+    }
+
+    private func liveMediaItem(_ media: CueMedia, layerId: String, canvasSize: CGSize) -> RenderItem {
+        SlideSceneBuilder.layerMediaItem(
+            media, id: "live-media-\(layerId)", layerId: layerId, stack: layerStack, canvasSize: canvasSize)
     }
 
     public mutating func fire(overlay: Overlay, atHostTime: Double = 0) {
@@ -526,6 +598,8 @@ public struct ShowState: Sendable, Equatable {
         case .media:
             liveMedia = [:]
             directMediaFires = []
+            liveLayerMedia = [:]
+            slideOnlyLayers = []
         case .overlays:
             for overlay in liveOverlays {
                 dismissOverlay(id: overlay.id, atHostTime: atHostTime)
@@ -544,6 +618,7 @@ public struct ShowState: Sendable, Equatable {
 
             liveMedia[layer] = nil
             directMediaFires.remove(layer)
+            slideOnlyLayers.remove(layer.rawValue)
         case .slide:
             clearSlide(atHostTime: atHostTime)
         case .overlays, .alerts:
@@ -570,6 +645,8 @@ public struct ShowState: Sendable, Equatable {
         for layer in LayerKind.allCases where !protecting.contains(layer) {
             clear(layer: layer)
         }
+        liveLayerMedia = [:]
+        slideOnlyLayers = slideOnlyLayers.filter { LayerKind(rawValue: $0) != nil }
         if includingAudio { clear(function: .audio) }
         clear(function: .signage)
     }
@@ -584,16 +661,12 @@ public struct ShowState: Sendable, Equatable {
 
         let canvasSize = explicitCanvas
             ?? SlideSceneBuilder.canvasSize(for: liveSlide?.presentation)
-        var scene = RenderScene(canvasSize: canvasSize)
+        var scene = RenderScene(canvasSize: canvasSize, layers: Self.renderLayers(for: layerStack))
         for (layer, media) in liveMedia {
-            scene.addItem(
-                RenderItem(
-                    id: "live-media-\(layer.rawValue)",
-                    frame: CGRect(origin: .zero, size: canvasSize),
-                    content: .media(id: media.mediaId, scaleMode: .fill)
-                ),
-                to: layer
-            )
+            scene.addItem(liveMediaItem(media, layerId: layer.rawValue, canvasSize: canvasSize), to: layer)
+        }
+        for (id, media) in liveLayerMedia {
+            scene.addItem(liveMediaItem(media, layerId: id, canvasSize: canvasSize), toLayer: id)
         }
         if let live = liveSlide {
 
@@ -777,6 +850,9 @@ public struct ShowState: Sendable, Equatable {
         var wanted: [String: Bool?] = [:]
         for media in liveMedia.values where !media.mediaId.isEmpty {
             wanted[media.mediaId] = media.loops
+        }
+        for media in liveLayerMedia.values where wanted[media.mediaId] == nil {
+            wanted.updateValue(media.loops, forKey: media.mediaId)
         }
 
         func merge(_ objects: [SlideObject]) {
