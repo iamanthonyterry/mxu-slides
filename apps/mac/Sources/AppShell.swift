@@ -311,6 +311,15 @@ struct ShellView: View {
         NewSlideRouter.shared.request()
     }
 
+    @ViewBuilder
+    private var modePicker: some View {
+        if isRunOnly {
+            runOnlyLockChip
+        } else {
+            ModeSwitcher(modeRaw: $modeRaw)
+        }
+    }
+
     private var runOnlyLockChip: some View {
         Button {
             pinFlow = .verify
@@ -462,10 +471,8 @@ struct ShellView: View {
                 Color.clear.frame(width: Self.trafficLightSlot(fullScreen: isFullScreen))
                 sidebarToggle
 
-                if isRunOnly {
-                    runOnlyLockChip
-                } else {
-                    ModeSwitcher(modeRaw: $modeRaw)
+                if !sidebarVisible {
+                    modePicker
                 }
 
                 if mode == .present, !sidebarVisible, let name = currentServiceName {
@@ -478,6 +485,13 @@ struct ShellView: View {
             .frame(height: Self.headerHeight)
         }
 
+        .overlay(alignment: .topLeading) {
+            if sidebarVisible {
+                modePicker
+                    .frame(height: Self.headerHeight)
+                    .padding(.leading, (draftSidebarWidth ?? sidebarWidth) + 16)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 0) {
                 if mode == .present {
@@ -698,7 +712,14 @@ struct ShellView: View {
 
                 VStack(spacing: 0) {
 
-                    Color.clear.frame(height: 36)
+                    HStack {
+                        Spacer()
+                        Text("Service Flow")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 36)
                     serviceHeader
                     Divider()
                     serviceSection
