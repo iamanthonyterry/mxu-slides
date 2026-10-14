@@ -130,7 +130,6 @@ struct SidebarSectionHeader<Accessory: View>: View {
 
 struct ModeSwitcher: View {
     @Binding var modeRaw: String
-    @Namespace private var thumb
 
     private var mode: AppMode { AppMode(rawValue: modeRaw) ?? .edit }
 
@@ -140,45 +139,35 @@ struct ModeSwitcher: View {
                 segment(candidate)
             }
         }
-        .padding(3)
-        .modifier(GlassPill())
-        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: modeRaw)
+        .padding(2)
+        .background(
+            Color.primary.opacity(0.03),
+            in: RoundedRectangle.standard(CornerStandard.element)
+        )
+        .overlay(
+            RoundedRectangle.standard(CornerStandard.element)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
+        )
         .help("Switch between Present, Edit and Scheduler")
     }
 
     private func segment(_ candidate: AppMode) -> some View {
         let selected = candidate == mode
+        let shape = RoundedRectangle.standard(
+            CornerStandard.nested(inset: 2, within: CornerStandard.element)
+        )
         return Button {
             modeRaw = candidate.rawValue
         } label: {
             Text(candidate.title)
-                .font(.subheadline.weight(selected ? .semibold : .medium))
+                .font(.caption.weight(selected ? .medium : .regular))
                 .foregroundStyle(selected ? .primary : .secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background {
-                    if selected {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.14))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
-                            .matchedGeometryEffect(id: "thumb", in: thumb)
-                    }
-                }
-                .contentShape(Capsule())
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(selected ? Color.primary.opacity(0.08) : .clear, in: shape)
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct GlassPill: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content.glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            content
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5))
-        }
     }
 }
 
