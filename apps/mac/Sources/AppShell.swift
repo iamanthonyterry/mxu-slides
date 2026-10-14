@@ -462,6 +462,12 @@ struct ShellView: View {
                         : 0
                 )
         }
+        .overlay(alignment: .top) {
+            if mode == .edit, !isRunOnly {
+                EditContextSwitcher(model: model)
+                    .frame(height: Self.headerHeight)
+            }
+        }
         .overlay(alignment: .topLeading) {
             HStack(spacing: 6) {
                 Color.clear.frame(width: Self.trafficLightSlot(fullScreen: isFullScreen))
@@ -471,9 +477,6 @@ struct ShellView: View {
                     runOnlyLockChip
                 } else {
                     ModeSwitcher(modeRaw: $modeRaw)
-                    if mode == .edit {
-                        EditContextSwitcher(model: model)
-                    }
                 }
 
                 if mode == .present, !sidebarVisible, let name = currentServiceName {
