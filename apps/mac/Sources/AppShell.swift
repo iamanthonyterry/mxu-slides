@@ -130,44 +130,44 @@ struct SidebarSectionHeader<Accessory: View>: View {
 
 struct ModeSwitcher: View {
     @Binding var modeRaw: String
-    @State private var hovering = false
 
     private var mode: AppMode { AppMode(rawValue: modeRaw) ?? .edit }
 
     var body: some View {
-        Menu {
-            ForEach(AppMode.allCases, id: \.rawValue) { mode in
-                Toggle(mode.title, isOn: Binding(
-                    get: { modeRaw == mode.rawValue },
-                    set: { _ in modeRaw = mode.rawValue }
-                ))
+        HStack(spacing: 2) {
+            ForEach(AppMode.allCases, id: \.rawValue) { candidate in
+                segment(candidate)
             }
-        } label: {
-            HStack(spacing: 5) {
-                Text(mode.title)
-                    .font(.subheadline.weight(.medium))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .contentShape(RoundedRectangle.standard(CornerStandard.element))
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .padding(2)
         .background(
-            hovering ? Color.primary.opacity(0.06) : .clear,
+            Color.primary.opacity(0.03),
             in: RoundedRectangle.standard(CornerStandard.element)
         )
         .overlay(
             RoundedRectangle.standard(CornerStandard.element)
                 .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
         )
-        .onHover { hovering = $0 }
-        .help("Switch between Present and Edit")
+        .help("Switch between Present, Edit and Scheduler")
+    }
+
+    private func segment(_ candidate: AppMode) -> some View {
+        let selected = candidate == mode
+        let shape = RoundedRectangle.standard(
+            CornerStandard.nested(inset: 2, within: CornerStandard.element)
+        )
+        return Button {
+            modeRaw = candidate.rawValue
+        } label: {
+            Text(candidate.title)
+                .font(.caption.weight(selected ? .medium : .regular))
+                .foregroundStyle(selected ? .primary : .secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(selected ? Color.primary.opacity(0.08) : .clear, in: shape)
+                .contentShape(shape)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -311,6 +311,15 @@ struct ShellView: View {
         NewSlideRouter.shared.request()
     }
 
+    @ViewBuilder
+    private var modePicker: some View {
+        if isRunOnly {
+            runOnlyLockChip
+        } else {
+            ModeSwitcher(modeRaw: $modeRaw)
+        }
+    }
+
     private var runOnlyLockChip: some View {
         Button {
             pinFlow = .verify
@@ -452,56 +461,48 @@ struct ShellView: View {
                 )
         }
         .overlay(alignment: .top) {
-
-            HStack(spacing: 8) {
-                if isRunOnly {
-                    runOnlyLockChip
-                } else {
-                    ModeSwitcher(modeRaw: $modeRaw)
-                    if mode == .edit {
-                        EditContextSwitcher(model: model)
-                    }
-                }
+            if mode == .edit, !isRunOnly {
+                EditContextSwitcher(model: model)
+                    .frame(height: Self.headerHeight)
             }
-            .frame(height: Self.headerHeight)
         }
         .overlay(alignment: .topLeading) {
             HStack(spacing: 6) {
                 Color.clear.frame(width: Self.trafficLightSlot(fullScreen: isFullScreen))
                 sidebarToggle
 
-                if mode == .present, !sidebarVisible {
-                    if let name = currentServiceName {
+                if !sidebarVisible {
+                    modePicker
+                }
 
-                        Text(name)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    presentViewMenu
-                    transitionChips
+                if mode == .present, !sidebarVisible, let name = currentServiceName {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             .frame(height: Self.headerHeight)
         }
 
         .overlay(alignment: .topLeading) {
-            if mode == .present, sidebarVisible {
-                HStack(spacing: 6) {
-                    presentViewMenu
-                    transitionChips
-                }
-                .frame(height: Self.headerHeight)
-                .padding(.leading, (draftSidebarWidth ?? sidebarWidth) + 16)
+            if sidebarVisible {
+                modePicker
+                    .frame(height: Self.headerHeight)
+                    .padding(.leading, (draftSidebarWidth ?? sidebarWidth) + 16)
             }
         }
-
         .overlay(alignment: .topTrailing) {
-            if let controls {
+            HStack(spacing: 0) {
+                if mode == .present {
+                    presentViewMenu
+                    transitionChips
+                        .padding(.leading, 6)
+                }
 
-                HStack(spacing: 0) {
-
+                if let controls {
                     BroadcastStatusChip(controls: controls)
+                        .padding(.leading, 12)
 
                     if let presets {
                         Spacer().frame(width: 8)
@@ -510,15 +511,15 @@ struct ShellView: View {
 
                     ClearChip(controls: controls)
                         .padding(.leading, 8)
-                    Spacer()
-                        .frame(
-                            width: railVisible
-                                ? (draftRightRailWidth ?? rightRailWidth) + CornerStandard.panelInset + 16
-                                : 16
-                        )
                 }
-                .frame(height: Self.headerHeight)
+                Spacer()
+                    .frame(
+                        width: railVisible
+                            ? (draftRightRailWidth ?? rightRailWidth) + CornerStandard.panelInset + 16
+                            : 16
+                    )
             }
+            .frame(height: Self.headerHeight)
         }
         .animation(.easeOut(duration: 0.15), value: sidebarVisible)
         .coordinateSpace(name: Self.shellSpace)
