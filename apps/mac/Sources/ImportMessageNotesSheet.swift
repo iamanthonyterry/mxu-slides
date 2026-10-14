@@ -1,7 +1,13 @@
 import PresenterCore
+import PPTXImport
 import SlideScene
 import SwiftUI
 import UniformTypeIdentifiers
+
+private enum MessageNotesLoadResult: Sendable {
+    case success(MessageNotesFile.Loaded)
+    case failure(String)
+}
 
 struct ImportMessageNotesSheet: View {
     let model: AppModel
@@ -16,10 +22,23 @@ struct ImportMessageNotesSheet: View {
     @State private var overrides: [String: MessageNotes.Kind] = [:]
     @State private var loadedFrom: PresentationOrigin?
     @State private var title = ""
-    @AppStorage("messageNotesStyle") private var storedStyle = ""
-    @AppStorage("messageNotesVersePerSlide") private var versePerSlide = true
+    @AppStorage("messageNotesKindLooks") private var storedKindLooks = ""
+    @State private var choosingKindThemes = false
+    @AppStorage("messageNotesShowVerseNumbers") private var showVerseNumbers = true
+    @AppStorage("messageNotesBlankSlidesBetween") private var blankSlidesBetweenSlides = false
+    @AppStorage("messageNotesKeepScriptureTogether") private var keepScripturePassagesTogether = true
+    @AppStorage("messageNotesBlankSlideAtBeginning") private var blankSlideAtBeginning = true
+    @State private var addedBlankSlideSlots: Set<Int> = []
+    @State private var blankExtras: [Int: Int] = [:]
+    @State private var removedBlankSlideSlots: Set<Int> = []
+    @AppStorage("messageNotesCombinePoints") private var combineAdjacentPoints = false
+    @State private var imageMediaIDs: [Int: [String]] = [:]
+    @State private var blankSlideImageMediaIDs: [Int: [String]] = [:]
+    @State private var removedSlideIndices: Set<Int> = []
+    @State private var showAdvanceOptions = false
 
     @State private var boldOnly = false
+    @State private var fileImportError: String?
 
     @State private var preview: Preview?
 
@@ -31,8 +50,20 @@ struct ImportMessageNotesSheet: View {
         var overrides: [String: MessageNotes.Kind]
         var themeId: String
         var themeStamp: Double
-        var style: String?
-        var versePerSlide: Bool
+        var kindThemes: [String: String] = [:]
+        var kindStamps: [String: Double] = [:]
+        var kindStyles: [String: String] = [:]
+        var combineAdjacentPoints: Bool
+        var showVerseNumbers: Bool
+        var blankSlidesBetweenSlides: Bool
+        var keepScripturePassagesTogether: Bool
+        var blankSlideAtBeginning: Bool
+        var addedBlankSlideSlots: Set<Int>
+        var blankExtras: [Int: Int]
+        var removedBlankSlideSlots: Set<Int>
+        var removedSlideIndices: Set<Int>
+        var imageMediaIDs: [Int: [String]]
+        var blankSlideImageMediaIDs: [Int: [String]]
         var boldOnly: Bool
     }
 
@@ -40,6 +71,12 @@ struct ImportMessageNotesSheet: View {
         struct Item: Sendable {
             var caption: String
             var slide: Slide
+            var sourceIndices: [Int]
+            var isPoint: Bool
+            var isBlank: Bool
+            var kind: MessageNotes.Kind
+            var blankSlideSlot: Int?
+            var isAdditionalBlankAfter = false
         }
 
         var parsed: MessageNotes.Parsed
@@ -47,15 +84,65 @@ struct ImportMessageNotesSheet: View {
         var items: [Item]
     }
 
-    private var styles: [String] { MessageNotes.styles(in: model.theme(themeId)) }
+    struct KindLook: Codable, Equatable {
+        var theme: String
+        var style: String?
+    }
 
-    private var style: String? { styles.contains(storedStyle) ? storedStyle : nil }
+    static let themedKinds: [MessageNotes.Kind] = [.title, .point, .scripture, .quote]
+
+    private var kindLooks: [String: KindLook] {
+        storedKindLooks.data(using: .utf8).flatMap { try? JSONDecoder().decode([String: KindLook].self, from: $0) } ?? [:]
+    }
+
+    private func look(for kind: MessageNotes.Kind) -> KindLook? {
+        guard let look = kindLooks[kind.rawValue] else { return nil }
+        return look.theme.isEmpty || look.theme == themeId || model.entry(look.theme) != nil ? look : nil
+    }
+
+    private var kindThemeIds: [MessageNotes.Kind: String] {
+        var chosen: [MessageNotes.Kind: String] = [:]
+        for kind in Self.themedKinds {
+            if let look = look(for: kind), !look.theme.isEmpty, look.theme != themeId { chosen[kind] = look.theme }
+        }
+        return chosen
+    }
+
+    private var kindStyles: [MessageNotes.Kind: String] {
+        var chosen: [MessageNotes.Kind: String] = [:]
+        for kind in Self.themedKinds {
+            if let style = look(for: kind)?.style { chosen[kind] = style }
+        }
+        return chosen
+    }
+
+    private func setKindLook(_ kind: MessageNotes.Kind, theme: String, style: String?) {
+        var stored = kindLooks
+        stored[kind.rawValue] = KindLook(theme: theme, style: style)
+        storedKindLooks = (try? JSONEncoder().encode(stored)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
 
     private var input: Input {
-        Input(
+        let chosen = kindThemeIds
+        return Input(
             text: text, hints: hints, overrides: overrides, themeId: themeId,
-            themeStamp: model.entry(themeId)?.updatedAt.timeIntervalSince1970 ?? 0, style: style,
-            versePerSlide: versePerSlide, boldOnly: boldOnly && mixesBold)
+            themeStamp: model.entry(themeId)?.updatedAt.timeIntervalSince1970 ?? 0,
+            kindThemes: Dictionary(uniqueKeysWithValues: chosen.map { ($0.key.rawValue, $0.value) }),
+            kindStamps: Dictionary(
+                chosen.map { ($0.value, model.entry($0.value)?.updatedAt.timeIntervalSince1970 ?? 0) },
+                uniquingKeysWith: { first, _ in first }),
+            kindStyles: Dictionary(uniqueKeysWithValues: kindStyles.map { ($0.key.rawValue, $0.value) }),
+            combineAdjacentPoints: combineAdjacentPoints,
+            showVerseNumbers: showVerseNumbers,
+            blankSlidesBetweenSlides: blankSlidesBetweenSlides,
+            keepScripturePassagesTogether: keepScripturePassagesTogether,
+            blankSlideAtBeginning: blankSlideAtBeginning,
+            addedBlankSlideSlots: addedBlankSlideSlots,
+            blankExtras: blankExtras,
+            removedBlankSlideSlots: removedBlankSlideSlots,
+            removedSlideIndices: removedSlideIndices, imageMediaIDs: imageMediaIDs,
+            blankSlideImageMediaIDs: blankSlideImageMediaIDs,
+            boldOnly: boldOnly && mixesBold)
     }
 
     private var mixesBold: Bool {
@@ -89,10 +176,34 @@ struct ImportMessageNotesSheet: View {
                 .padding(12)
         }
         .frame(minWidth: 980, minHeight: 640)
+        .alert("Couldn’t import file", isPresented: Binding(
+            get: { fileImportError != nil },
+            set: { if !$0 { fileImportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { fileImportError = nil }
+        } message: {
+            Text(fileImportError ?? "")
+        }
+        .onChange(of: text) { _, _ in clearSlideOptions() }
+        .onChange(of: boldOnly) { _, _ in clearSlideOptions() }
+        .onChange(of: blankSlideAtBeginning) { _, _ in clearBlankSlideSelections() }
+        .onChange(of: blankSlidesBetweenSlides) { _, _ in clearBlankSlideSelections() }
+        .onChange(of: keepScripturePassagesTogether) { _, _ in clearBlankSlideSelections() }
         .task(id: input) {
             let input = input
+            await model.themesFilled([input.themeId] + Array(input.kindThemes.values))
             let theme = model.theme(input.themeId)
-            let built = await Task.detached(priority: .userInitiated) { Self.build(input, theme: theme) }.value
+            var kindThemes: [MessageNotes.Kind: Theme] = [:]
+            for (raw, id) in input.kindThemes {
+                if let kind = MessageNotes.Kind(rawValue: raw), let own = model.theme(id) { kindThemes[kind] = own }
+            }
+            var kindStyles: [MessageNotes.Kind: String] = [:]
+            for (raw, style) in input.kindStyles {
+                if let kind = MessageNotes.Kind(rawValue: raw) { kindStyles[kind] = style }
+            }
+            let built = await Task.detached(priority: .userInitiated) {
+                Self.build(input, theme: theme, kindThemes: kindThemes, kindStyles: kindStyles)
+            }.value
             if !Task.isCancelled { preview = built }
         }
     }
@@ -159,26 +270,115 @@ struct ImportMessageNotesSheet: View {
     private func kindBinding(_ block: MessageNotes.Block) -> Binding<MessageNotes.Kind> {
         Binding(
             get: { block.kind },
-            set: { overrides[block.source] = $0 }
+            set: {
+                overrides[block.source] = $0
+                clearSlideOptions()
+            }
         )
+    }
+
+    private func clearSlideOptions() {
+        imageMediaIDs = [:]
+        blankSlideImageMediaIDs = [:]
+        removedSlideIndices = []
+        clearBlankSlideSelections()
+    }
+
+    private func clearBlankSlideSelections() {
+        addedBlankSlideSlots = []
+        blankExtras = [:]
+        removedBlankSlideSlots = []
+    }
+
+    private func addBlankSlide(afterItemAt itemOffset: Int) {
+        guard let preview else { return }
+        let item = preview.items[itemOffset]
+        if item.isBlank, let slot = item.blankSlideSlot {
+            blankExtras[slot, default: 0] += 1
+            return
+        }
+        let followingContent = preview.items.dropFirst(itemOffset + 1).first { !$0.isBlank }
+        let slot = followingContent?.sourceIndices.first ?? preview.parsed.splittingVerses().blocks.count
+        let hasBlank = preview.items.contains { $0.isBlank && !$0.isAdditionalBlankAfter && $0.blankSlideSlot == slot }
+        if hasBlank {
+            blankExtras[slot, default: 0] += 1
+        } else {
+            addedBlankSlideSlots.insert(slot)
+            removedBlankSlideSlots.remove(slot)
+        }
+    }
+
+    private func canRemove(_ item: Preview.Item) -> Bool {
+        item.isBlank ? item.blankSlideSlot != nil : !item.sourceIndices.isEmpty
+    }
+
+    private func removeSlide(_ item: Preview.Item) {
+        if item.isBlank, let slot = item.blankSlideSlot {
+            if let extras = blankExtras[slot], extras > 0 {
+                blankExtras[slot] = extras > 1 ? extras - 1 : nil
+            } else {
+                removedBlankSlideSlots.insert(slot)
+            }
+        } else {
+            removedSlideIndices.formUnion(item.sourceIndices)
+        }
+    }
+
+    private func canAddBlank(after item: Preview.Item) -> Bool {
+        !item.isBlank || item.blankSlideSlot != nil
     }
 
     private var previewPane: some View {
         Group {
             if let preview, !isEmpty {
-                let theme = model.theme(preview.presentation.themeId)
-                let stamp = model.entry(preview.presentation.themeId)?.updatedAt.timeIntervalSince1970 ?? 0
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
-                        ForEach(Array(preview.items.enumerated()), id: \.offset) { _, item in
-                            VStack(alignment: .leading, spacing: 3) {
-                                ImportSlideThumbnail(
-                                    model: model, render: render, slide: item.slide, theme: theme, showChords: false,
-                                    cacheKey: Self.cacheKey(item.slide, themeId: preview.presentation.themeId, themeStamp: stamp))
-                                Text(item.caption)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Hover a slide to add an image, or drop images onto it. Use the red minus to remove a slide and the green plus between slides to add a blank one.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
+                            ForEach(Array(preview.items.enumerated()), id: \.offset) { offset, item in
+                                let itemThemeId = item.slide.themeId ?? preview.presentation.themeId
+                                let itemTheme = model.theme(itemThemeId)
+                                let stamp = model.entry(itemThemeId)?.updatedAt.timeIntervalSince1970 ?? 0
+                                VStack(alignment: .leading, spacing: 5) {
+                                    ImportSlideThumbnail(
+                                        model: model, render: render, slide: item.slide, theme: itemTheme, showChords: false,
+                                        cacheKey: Self.cacheKey(item.slide, themeId: itemThemeId, themeStamp: stamp))
+                                        .overlay(alignment: .topLeading) {
+                                            if canRemove(item) {
+                                                SlideBadgeButton(
+                                                    systemImage: "minus.circle.fill", tint: .red,
+                                                    help: "Remove this slide from the import"
+                                                ) { removeSlide(item) }
+                                                .offset(x: -7, y: -7)
+                                            }
+                                        }
+                                        .overlay {
+                                            if imageKey(for: item) != nil {
+                                                SlideImageHover(
+                                                    imageCount: imageIDs(for: item).count,
+                                                    add: { chooseImage(for: item) },
+                                                    remove: { removeImages(for: item) })
+                                            }
+                                        }
+                                        .overlay(alignment: .trailing) {
+                                            if canAddBlank(after: item) {
+                                                BlankSlideGap { addBlankSlide(afterItemAt: offset) }
+                                                    .offset(x: 15)
+                                            }
+                                        }
+                                    Text(item.caption)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .zIndex(Double(preview.items.count - offset))
+                                .dropDestination(for: URL.self) { urls, _ in
+                                    guard imageKey(for: item) != nil, !urls.isEmpty else { return false }
+                                    importImages(urls, for: item)
+                                    return true
+                                }
                             }
                         }
                     }
@@ -207,25 +407,15 @@ struct ImportMessageNotesSheet: View {
                 ) { [model] themeId, _ in
                     model.updateSlideBuilding { $0.messageNotesThemeId = themeId.isEmpty ? nil : themeId }
                 }
-                if styles.count > 1 {
-                    Picker("Style", selection: Binding(get: { style ?? styles[0] }, set: { storedStyle = $0 })) {
-                        ForEach(styles, id: \.self) { style in
-                            Text(style.isEmpty ? "Unfiled" : style).tag(style)
-                        }
-                    }
-                    .fixedSize()
-                    .help("The theme folder the Point, Verse and Quote designs come from — full slides, or thirds over the camera")
-                }
+                Button("By Type…") { choosingKindThemes = true }
+                    .help("Give titles, points, scriptures and quotes each their own theme")
+                    .popover(isPresented: $choosingKindThemes, arrowEdge: .top) { kindThemesPopover }
             }
             HStack(spacing: 14) {
-                Toggle("A verse per slide", isOn: $versePerSlide)
-                    .fixedSize()
-                    .help("Split a passage like John 3:16-18 into one slide per verse. Verse numbers in the text mark the breaks; without them the passage breaks at sentences and each slide keeps the whole reference")
-                if mixesBold {
-                    Toggle("Bold lines only", isOn: $boldOnly)
-                        .fixedSize()
-                        .help("For notes where only the bold lines belong on screen: unbolded lines are left off as slide notes. Scripture and quotes still make slides")
-                }
+                Toggle("Advanced options", isOn: $showAdvanceOptions)
+                    .toggleStyle(.switch)
+                    .controlSize(.large)
+                    .font(.headline)
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -233,10 +423,92 @@ struct ImportMessageNotesSheet: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(isEmpty)
             }
+            if showAdvanceOptions {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Verse numbers", isOn: $showVerseNumbers)
+                        .help("Show or hide individual verse numbers. The full passage reference remains on the slide.")
+                    if mixesBold {
+                        Toggle("Bold lines only", isOn: $boldOnly)
+                            .help("Leave unbolded lines off screen as slide notes. Scripture and quotes still make slides.")
+                    }
+                    Toggle("Combine adjacent points", isOn: $combineAdjacentPoints)
+                        .help("Put runs of consecutive points on one slide; each point appears on its own click.")
+                    Toggle("Blank slide between each slide", isOn: $blankSlidesBetweenSlides)
+                        .help("Insert an empty slide between unrelated generated content slides.")
+                    Toggle("Keep scripture passages together", isOn: $keepScripturePassagesTogether)
+                        .help("Do not insert optional blank slides between consecutive verses in the same passage.")
+                    Toggle("Blank slide at beginning", isOn: $blankSlideAtBeginning)
+                        .help("Start the imported presentation with an empty slide.")
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.caption)
+                .padding(.leading, 22)
+                .padding(.top, 4)
+                .transition(.opacity)
+            }
         }
     }
 
-    static func name(_ kind: MessageNotes.Kind) -> String {
+    private var kindThemesPopover: some View {
+        let themes = model.entries(of: .theme).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Theme for each kind of slide")
+                .font(.headline)
+            ForEach(Self.themedKinds, id: \.self) { kind in
+                HStack {
+                    Text(Self.name(kind))
+                        .frame(width: 80, alignment: .leading)
+                    kindMenu(kind, themes: themes)
+                }
+            }
+            Text("Pick a theme, then its style where it has more than one. A slide takes its design from that theme's Title, Point, Verse or Quote design.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 380, alignment: .leading)
+        }
+        .padding(14)
+        .task { await model.themesFilled(themes.map(\.id)) }
+    }
+
+    private func kindMenu(_ kind: MessageNotes.Kind, themes: [LibraryIndex.Entry]) -> some View {
+        let current = look(for: kind)
+        let currentTheme = current?.theme ?? ""
+        func themeItem(id: String, name: String) -> some View {
+            let styles = MessageNotes.styles(in: model.theme(id.isEmpty ? themeId : id))
+            return Group {
+                if styles.count > 1 {
+                    Menu(name) {
+                        ForEach(styles, id: \.self) { style in
+                            Button {
+                                setKindLook(kind, theme: id, style: style)
+                            } label: {
+                                let chosen = currentTheme == id && current?.style == style
+                                Text((chosen ? "✓ " : "") + (style.isEmpty ? "Unfiled" : style))
+                            }
+                        }
+                    }
+                } else {
+                    Button((currentTheme == id ? "✓ " : "") + name) {
+                        setKindLook(kind, theme: id, style: styles.first)
+                    }
+                }
+            }
+        }
+        let deckName = model.entry(themeId)?.name ?? "None"
+        let label = currentTheme.isEmpty ? "Deck theme (\(deckName))" : model.entry(currentTheme)?.name ?? "Missing"
+        let styleLabel = current?.style.flatMap { $0.isEmpty ? nil : " › " + $0 } ?? ""
+        return Menu(label + styleLabel) {
+            themeItem(id: "", name: "Deck theme (\(deckName))")
+            Divider()
+            ForEach(themes, id: \.id) { entry in
+                themeItem(id: entry.id, name: entry.name)
+            }
+        }
+        .frame(width: 280)
+    }
+
+    nonisolated static func name(_ kind: MessageNotes.Kind) -> String {
         switch kind {
         case .title: "Title"
         case .point: "Point"
@@ -257,18 +529,104 @@ struct ImportMessageNotesSheet: View {
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
-    nonisolated static func build(_ input: Input, theme: Theme?) -> Preview {
+    nonisolated static func build(
+        _ input: Input, theme: Theme?, kindThemes: [MessageNotes.Kind: Theme] = [:],
+        kindStyles: [MessageNotes.Kind: String] = [:]
+    ) -> Preview {
         let parsed = MessageNotes.parse(
             input.text, hints: input.hints, overrides: input.overrides, boldOnly: input.boldOnly)
-        let made = input.versePerSlide ? parsed.splittingVerses() : parsed
+        let made = parsed.splittingVerses().removingBlocks(at: input.removedSlideIndices)
+        let revealing = input.combineAdjacentPoints ? made.pointIndices() : []
+        let groups = MessageNotes.slideGroups(
+            in: made.blocks, revealingPointIndices: revealing,
+            includeTitleSlide: false)
+        let blankSlots = MessageNotes.blankSlideSlots(
+            in: made.blocks, revealingPointIndices: revealing,
+            includeTitleSlide: false,
+            blankSlidesBetweenSlides: input.blankSlidesBetweenSlides,
+            keepScripturePassagesTogether: input.keepScripturePassagesTogether,
+            blankSlideAtBeginning: input.blankSlideAtBeginning,
+            additionalBlankSlideSlots: input.addedBlankSlideSlots)
+        let removedBlankSlideSlots = input.removedBlankSlideSlots.intersection(blankSlots)
         let presentation = MessageNotes.makePresentation(
-            made, id: "message-notes-import-preview", themeId: input.themeId, theme: theme, style: input.style)
-        let shown = made.blocks.filter { $0.kind != .skip }
-        let items = zip(shown, presentation.slides).map { block, slide in
-            Preview.Item(
-                caption: ([name(block.kind)] + [block.kind == .title ? nil : block.detail].compactMap { $0 })
-                    .joined(separator: " · "),
-                slide: slide)
+            made, id: "message-notes-import-preview", themeId: input.themeId, theme: theme,
+            kindThemes: kindThemes, kindStyles: kindStyles,
+            revealingPointIndices: revealing,
+            showVerseNumbers: input.showVerseNumbers, includeTitleSlide: false,
+            blankSlidesBetweenSlides: input.blankSlidesBetweenSlides,
+            keepScripturePassagesTogether: input.keepScripturePassagesTogether,
+            blankSlideAtBeginning: input.blankSlideAtBeginning,
+            additionalBlankSlideSlots: input.addedBlankSlideSlots,
+            blankSlideAfterSlots: Set(input.blankExtras.filter { $0.value >= 1 }.keys),
+            extraBlankSlides: input.blankExtras.compactMapValues { $0 > 1 ? $0 - 1 : nil },
+            removedBlankSlideSlots: removedBlankSlideSlots,
+            imageMediaIDs: input.imageMediaIDs,
+            blankSlideImageMediaIDs: input.blankSlideImageMediaIDs)
+        var items: [Preview.Item] = []
+        var slideIndex = 0
+        func appendExtras(_ slot: Int) {
+            for _ in 0..<(input.blankExtras[slot] ?? 0) where slideIndex < presentation.slides.count {
+                items.append(Preview.Item(
+                    caption: "Blank", slide: presentation.slides[slideIndex], sourceIndices: [],
+                    isPoint: false, isBlank: true, kind: .skip, blankSlideSlot: slot,
+                    isAdditionalBlankAfter: true))
+                slideIndex += 1
+            }
+        }
+        if blankSlots.contains(-1), !removedBlankSlideSlots.contains(-1),
+           let blank = presentation.slides.first {
+            items.append(Preview.Item(
+                caption: "Blank", slide: blank, sourceIndices: [], isPoint: false, isBlank: true,
+                kind: .skip, blankSlideSlot: -1))
+            slideIndex = 1
+            appendExtras(-1)
+        }
+        for (_, indices) in groups.enumerated() {
+            let blankSlot = indices.first
+            if let blankSlot, blankSlots.contains(blankSlot), !removedBlankSlideSlots.contains(blankSlot),
+               slideIndex < presentation.slides.count {
+                items.append(Preview.Item(
+                    caption: "Blank", slide: presentation.slides[slideIndex],
+                    sourceIndices: [], isPoint: false, isBlank: true, kind: .skip,
+                    blankSlideSlot: blankSlot))
+                slideIndex += 1
+                appendExtras(blankSlot)
+            }
+            guard slideIndex < presentation.slides.count else { break }
+            let slide = presentation.slides[slideIndex]
+            let blocks = indices.map { made.blocks[$0] }
+            let caption: String
+            if blocks.count > 1 {
+                caption = "\(blocks.count) points · reveal on click"
+            } else if let block = blocks.first {
+                caption = ([name(block.kind)] + [block.kind == .title ? nil : block.detail].compactMap { $0 })
+                    .joined(separator: " · ")
+            } else {
+                caption = ""
+            }
+            items.append(Preview.Item(
+                caption: caption,
+                slide: slide,
+                sourceIndices: indices,
+                isPoint: blocks.allSatisfy { $0.kind == .point },
+                isBlank: false,
+                kind: blocks.first?.kind ?? .skip,
+                blankSlideSlot: nil))
+            slideIndex += 1
+        }
+        let endSlot = made.blocks.count
+        if blankSlots.contains(endSlot), !removedBlankSlideSlots.contains(endSlot),
+           slideIndex < presentation.slides.count {
+            items.append(Preview.Item(
+                caption: "Blank", slide: presentation.slides[slideIndex], sourceIndices: [], isPoint: false, isBlank: true,
+                kind: .skip, blankSlideSlot: endSlot))
+            slideIndex += 1
+            appendExtras(endSlot)
+        }
+        if items.isEmpty, let blank = presentation.slides.first {
+            items.append(Preview.Item(
+                caption: "Blank", slide: blank, sourceIndices: [], isPoint: false, isBlank: true,
+                kind: .skip, blankSlideSlot: nil))
         }
         return Preview(parsed: parsed, presentation: presentation, items: items)
     }
@@ -277,18 +635,93 @@ struct ImportMessageNotesSheet: View {
         let content = slide.objects.map { object in
             object.name + "=" + object.text + "|"
                 + (object.styleRuns ?? []).map { "\($0.line).\($0.column).\($0.length)" }.joined(separator: ",")
+                + "|\(object.textStyle?.fontSize ?? 0)|"
+                + "|\(object.fill?.mediaId ?? "")|\(object.opacity ?? 1)|"
+                + (object.animationSteps ?? []).map { step in
+                    step.animation.rawValue + ":" + (step.ranges ?? []).map { "\($0.line).\($0.column).\($0.length)" }.joined(separator: ",")
+                }.joined(separator: ";")
         }.joined(separator: "¶")
         return "message-notes-import|\(themeId)|\(themeStamp)|\(slide.themeSlideName ?? "")|\(content)"
+    }
+
+    private func chooseImage(for item: Preview.Item) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.begin { response in
+            guard response == .OK else { return }
+            importImages(panel.urls, for: item)
+        }
+    }
+
+    private func importImages(_ urls: [URL], for item: Preview.Item) {
+        guard let key = imageKey(for: item) else { return }
+        let images = urls.filter { url in
+            UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+        }
+        guard !images.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        Task { @MainActor in
+            let ids = await model.importFiles(images)
+            let imageIDs = ids.filter { model.media($0)?.mediaKind == .image }
+            guard !imageIDs.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            if item.isBlank {
+                blankSlideImageMediaIDs[key] = imageIDs
+            } else {
+                imageMediaIDs[key] = imageIDs
+            }
+        }
+    }
+
+    private func imageKey(for item: Preview.Item) -> Int? {
+        guard !item.isAdditionalBlankAfter else { return nil }
+        return item.isBlank ? item.blankSlideSlot : item.sourceIndices.first
+    }
+
+    private func imageIDs(for item: Preview.Item) -> [String] {
+        guard let key = imageKey(for: item) else { return [] }
+        return item.isBlank ? blankSlideImageMediaIDs[key, default: []] : imageMediaIDs[key, default: []]
+    }
+
+    private func removeImages(for item: Preview.Item) {
+        guard let key = imageKey(for: item) else { return }
+        if item.isBlank {
+            blankSlideImageMediaIDs.removeValue(forKey: key)
+        } else {
+            imageMediaIDs.removeValue(forKey: key)
+        }
     }
 
     private func loadFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = MessageNotesFile.extensions.compactMap { UTType(filenameExtension: $0) }
         panel.begin { response in
-            guard response == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+            guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
-                let loaded = await Task.detached { MessageNotesFile.load(data, filename: url.lastPathComponent) }.value
-                if let loaded {
+                let outcome = await Task.detached(priority: .userInitiated) { () -> MessageNotesLoadResult in
+                    do {
+                        if url.pathExtension.lowercased() == "pages" {
+                            return .success(try MessageNotesFile.loadPages(at: url))
+                        }
+                        if url.pathExtension.lowercased() == "pptx" {
+                            let text = try PPTXNotesExtractor.extractText(from: url)
+                            return .success(MessageNotesFile.Loaded(text: text))
+                        }
+                        let data = try Data(contentsOf: url)
+                        guard let loaded = MessageNotesFile.load(data, filename: url.lastPathComponent) else {
+                            return .failure("The selected file did not contain readable text.")
+                        }
+                        return .success(loaded)
+                    } catch {
+                        return .failure(error.localizedDescription)
+                    }
+                }.value
+                if case .success(let loaded) = outcome {
                     text = loaded.text
                     hints = loaded.hints
                     overrides = [:]
@@ -298,7 +731,9 @@ struct ImportMessageNotesSheet: View {
                         title = url.deletingPathExtension().lastPathComponent
                     }
                 } else {
-                    NSSound.beep()
+                    if case .failure(let message) = outcome {
+                        fileImportError = message
+                    }
                 }
             }
         }
@@ -307,14 +742,95 @@ struct ImportMessageNotesSheet: View {
     private func importNow() {
         let fallback = title.trimmingCharacters(in: .whitespaces)
         let parsed = MessageNotes.parse(text, hints: hints, overrides: overrides, boldOnly: boldOnly && mixesBold)
+        let prepared = parsed.splittingVerses().removingBlocks(at: removedSlideIndices)
         let id = model.importMessageNotes(
-            versePerSlide ? parsed.splittingVerses() : parsed,
+            prepared,
             fallbackTitle: fallback.isEmpty ? nil : fallback,
             themeId: themeId,
-            style: style,
+            kindThemeIds: kindThemeIds,
+            kindStyles: kindStyles,
+            revealingPointIndices: combineAdjacentPoints ? prepared.pointIndices() : [],
+            showVerseNumbers: showVerseNumbers,
+            blankSlidesBetweenSlides: blankSlidesBetweenSlides,
+            keepScripturePassagesTogether: keepScripturePassagesTogether,
+            blankSlideAtBeginning: blankSlideAtBeginning,
+            additionalBlankSlideSlots: addedBlankSlideSlots,
+            blankSlideAfterSlots: Set(blankExtras.filter { $0.value >= 1 }.keys),
+            extraBlankSlides: blankExtras.compactMapValues { $0 > 1 ? $0 - 1 : nil },
+            removedBlankSlideSlots: removedBlankSlideSlots,
+            imageMediaIDs: imageMediaIDs,
+            blankSlideImageMediaIDs: blankSlideImageMediaIDs,
             origin: loadedFrom ?? PresentationOrigin(.messageNotes)
         )
         dismiss()
         if let id { onImported(id) }
+    }
+}
+
+private struct SlideBadgeButton: View {
+    let systemImage: String
+    let tint: Color
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, tint)
+                .font(.system(size: 17))
+                .background(Circle().fill(.white).padding(2))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+private struct BlankSlideGap: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            if hovering {
+                SlideBadgeButton(
+                    systemImage: "plus.circle.fill", tint: .green,
+                    help: "Add a blank slide here", action: action)
+            }
+        }
+        .frame(width: 26)
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct SlideImageHover: View {
+    let imageCount: Int
+    let add: () -> Void
+    let remove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            if hovering {
+                VStack(spacing: 6) {
+                    Button(action: add) {
+                        Label("Add image…", systemImage: "photo.badge.plus")
+                    }
+                    if imageCount > 0 {
+                        Button(role: .destructive, action: remove) {
+                            Label(imageCount > 1 ? "Remove \(imageCount) images" : "Remove image", systemImage: "xmark.circle")
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }

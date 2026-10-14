@@ -1131,9 +1131,11 @@ struct LibrarySidebar: View {
     private func showImported(_ id: String) {
         showHome(id)
         if appModeRaw == AppMode.edit.rawValue {
-            model.openInEditor(entryID: id)
+            model.openInEditor(entryID: id, slideID: model.pendingEditorSlideID)
             model.retargetPresentReturn(entryID: id)
         } else {
+            model.pendingEditorSlideID = nil
+            model.pendingEditorObjectID = nil
             model.openInPresent(entryID: id, presenting: appModeRaw == AppMode.present.rawValue)
             appModeRaw = AppMode.present.rawValue
         }
