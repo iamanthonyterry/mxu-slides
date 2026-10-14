@@ -130,44 +130,55 @@ struct SidebarSectionHeader<Accessory: View>: View {
 
 struct ModeSwitcher: View {
     @Binding var modeRaw: String
-    @State private var hovering = false
+    @Namespace private var thumb
 
     private var mode: AppMode { AppMode(rawValue: modeRaw) ?? .edit }
 
     var body: some View {
-        Menu {
-            ForEach(AppMode.allCases, id: \.rawValue) { mode in
-                Toggle(mode.title, isOn: Binding(
-                    get: { modeRaw == mode.rawValue },
-                    set: { _ in modeRaw = mode.rawValue }
-                ))
+        HStack(spacing: 2) {
+            ForEach(AppMode.allCases, id: \.rawValue) { candidate in
+                segment(candidate)
             }
-        } label: {
-            HStack(spacing: 5) {
-                Text(mode.title)
-                    .font(.subheadline.weight(.medium))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .contentShape(RoundedRectangle.standard(CornerStandard.element))
         }
-        .menuStyle(.button)
+        .padding(3)
+        .modifier(GlassPill())
+        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: modeRaw)
+        .help("Switch between Present, Edit and Scheduler")
+    }
+
+    private func segment(_ candidate: AppMode) -> some View {
+        let selected = candidate == mode
+        return Button {
+            modeRaw = candidate.rawValue
+        } label: {
+            Text(candidate.title)
+                .font(.subheadline.weight(selected ? .semibold : .medium))
+                .foregroundStyle(selected ? .primary : .secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background {
+                    if selected {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.14))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+                            .matchedGeometryEffect(id: "thumb", in: thumb)
+                    }
+                }
+                .contentShape(Capsule())
+        }
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .background(
-            hovering ? Color.primary.opacity(0.06) : .clear,
-            in: RoundedRectangle.standard(CornerStandard.element)
-        )
-        .overlay(
-            RoundedRectangle.standard(CornerStandard.element)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-        )
-        .onHover { hovering = $0 }
-        .help("Switch between Present and Edit")
+    }
+}
+
+private struct GlassPill: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5))
+        }
     }
 }
 
@@ -451,9 +462,11 @@ struct ShellView: View {
                         : 0
                 )
         }
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 6) {
+                Color.clear.frame(width: Self.trafficLightSlot(fullScreen: isFullScreen))
+                sidebarToggle
 
-            HStack(spacing: 8) {
                 if isRunOnly {
                     runOnlyLockChip
                 } else {
@@ -462,46 +475,28 @@ struct ShellView: View {
                         EditContextSwitcher(model: model)
                     }
                 }
-            }
-            .frame(height: Self.headerHeight)
-        }
-        .overlay(alignment: .topLeading) {
-            HStack(spacing: 6) {
-                Color.clear.frame(width: Self.trafficLightSlot(fullScreen: isFullScreen))
-                sidebarToggle
 
-                if mode == .present, !sidebarVisible {
-                    if let name = currentServiceName {
-
-                        Text(name)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    presentViewMenu
-                    transitionChips
+                if mode == .present, !sidebarVisible, let name = currentServiceName {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             .frame(height: Self.headerHeight)
-        }
-
-        .overlay(alignment: .topLeading) {
-            if mode == .present, sidebarVisible {
-                HStack(spacing: 6) {
-                    presentViewMenu
-                    transitionChips
-                }
-                .frame(height: Self.headerHeight)
-                .padding(.leading, (draftSidebarWidth ?? sidebarWidth) + 16)
-            }
         }
 
         .overlay(alignment: .topTrailing) {
-            if let controls {
+            HStack(spacing: 0) {
+                if mode == .present {
+                    presentViewMenu
+                    transitionChips
+                        .padding(.leading, 6)
+                }
 
-                HStack(spacing: 0) {
-
+                if let controls {
                     BroadcastStatusChip(controls: controls)
+                        .padding(.leading, 12)
 
                     if let presets {
                         Spacer().frame(width: 8)
@@ -510,15 +505,15 @@ struct ShellView: View {
 
                     ClearChip(controls: controls)
                         .padding(.leading, 8)
-                    Spacer()
-                        .frame(
-                            width: railVisible
-                                ? (draftRightRailWidth ?? rightRailWidth) + CornerStandard.panelInset + 16
-                                : 16
-                        )
                 }
-                .frame(height: Self.headerHeight)
+                Spacer()
+                    .frame(
+                        width: railVisible
+                            ? (draftRightRailWidth ?? rightRailWidth) + CornerStandard.panelInset + 16
+                            : 16
+                    )
             }
+            .frame(height: Self.headerHeight)
         }
         .animation(.easeOut(duration: 0.15), value: sidebarVisible)
         .coordinateSpace(name: Self.shellSpace)
@@ -711,14 +706,7 @@ struct ShellView: View {
 
                 VStack(spacing: 0) {
 
-                    HStack {
-                        Spacer()
-                        Text("Service Flow")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 36)
+                    Color.clear.frame(height: 36)
                     serviceHeader
                     Divider()
                     serviceSection
