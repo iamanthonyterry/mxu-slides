@@ -1584,6 +1584,46 @@
         }
       ]
     },
+    "TimelineCue": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "slideId",
+          "type": "string"
+        },
+        {
+          "name": "timeSeconds",
+          "type": "double"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": true
+        }
+      ]
+    },
+    "PresentationTimeline": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "timecodeEnabled",
+          "type": "bool"
+        },
+        {
+          "name": "offsetSeconds",
+          "type": "double"
+        },
+        {
+          "name": "cues",
+          "type": "list:TimelineCue"
+        },
+        {
+          "name": "durationSeconds",
+          "type": "double",
+          "optional": true
+        }
+      ]
+    },
     "PresentationSection": {
       "kind": "record",
       "fields": [
@@ -1802,6 +1842,11 @@
         {
           "name": "origin",
           "type": "PresentationOrigin",
+          "optional": true
+        },
+        {
+          "name": "timeline",
+          "type": "PresentationTimeline",
           "optional": true
         }
       ]

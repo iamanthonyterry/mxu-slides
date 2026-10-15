@@ -37,6 +37,7 @@ struct SlideEditorView: View {
     @State private var showingArrangement = false
     @State private var showingReflow = false
     @State private var showingChords = false
+    @State private var showingTimeline = false
 
     @AppStorage("shell.sidebarVisible") private var sidebarVisible = true
 
@@ -1136,6 +1137,9 @@ struct SlideEditorView: View {
         .sheet(isPresented: $showingChords) {
             ChordEditorSheet(model: model.appModel, render: render, presentationID: model.presentation.id)
         }
+        .sheet(isPresented: $showingTimeline) {
+            TimelineEditorSheet(model: model.appModel, presentationID: model.presentation.id)
+        }
         .confirmationDialog(
             "Apply \(pendingThemeID.flatMap { appModel.entry($0)?.name } ?? "this theme") to every slide?",
             isPresented: Binding(get: { pendingThemeID != nil }, set: { if !$0 { pendingThemeID = nil } }),
@@ -1220,6 +1224,13 @@ struct SlideEditorView: View {
             }
             .help("Chord Chart — every line's chords as ChordPro text")
 
+            Button {
+                showingTimeline = true
+            } label: {
+                Label("Timeline", systemImage: "timeline.selection")
+            }
+            .help("Timeline — slide cues on a clock, fired by timecode")
+
             Menu {
                 themeItems(model)
             } label: {
@@ -1284,6 +1295,7 @@ struct SlideEditorView: View {
                 Button("Chord Chart…") { showingChords = true }
 
                 Button("Export…") { model.appModel.exportPresentation(model.presentation, render: render) }
+                Button("Timeline…") { showingTimeline = true }
                 Divider()
                 Menu("Theme") { themeItems(model) }
                 if !model.presentation.themeId.isEmpty {

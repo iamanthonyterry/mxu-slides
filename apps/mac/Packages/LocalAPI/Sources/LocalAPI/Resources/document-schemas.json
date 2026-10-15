@@ -1284,6 +1284,49 @@
         "delaySeconds"
       ]
     },
+    "TimelineCue": {
+      "type": "object",
+      "properties": {
+        "slideId": {
+          "type": "string"
+        },
+        "timeSeconds": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slideId",
+        "timeSeconds"
+      ]
+    },
+    "PresentationTimeline": {
+      "type": "object",
+      "properties": {
+        "timecodeEnabled": {
+          "type": "boolean"
+        },
+        "offsetSeconds": {
+          "type": "number"
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TimelineCue"
+          }
+        },
+        "durationSeconds": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "timecodeEnabled",
+        "offsetSeconds",
+        "cues"
+      ]
+    },
     "PresentationSection": {
       "type": "object",
       "properties": {
@@ -1464,6 +1507,9 @@
         },
         "origin": {
           "$ref": "#/components/schemas/PresentationOrigin"
+        },
+        "timeline": {
+          "$ref": "#/components/schemas/PresentationTimeline"
         }
       },
       "required": [

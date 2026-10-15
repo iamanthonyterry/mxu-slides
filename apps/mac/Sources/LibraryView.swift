@@ -33,6 +33,7 @@ struct LibrarySidebar: View {
     @State private var mediaSettingsTarget: MediaSettingsTarget?
     @State private var newFolderTarget: LibraryIndex.Entry?
     @State private var chordEditTarget: LibraryIndex.Entry?
+    @State private var timelineEditTarget: LibraryIndex.Entry?
 
     @State private var pendingApplyTheme: PendingDeckTheme?
     @State private var creatingFolder = false
@@ -122,6 +123,9 @@ struct LibrarySidebar: View {
         }
         .sheet(item: $chordEditTarget) { entry in
             ChordEditorSheet(model: model, render: render, presentationID: entry.id)
+        }
+        .sheet(item: $timelineEditTarget) { entry in
+            TimelineEditorSheet(model: model, presentationID: entry.id)
         }
         .sheet(isPresented: $creatingFolder) {
             NewFolderSheet(model: model, entry: nil, parentPath: realPath(folderPath ?? []))
@@ -1053,6 +1057,7 @@ struct LibrarySidebar: View {
             }
             Button("Edit Chords…") { chordEditTarget = entry }
             Button("Export…") { model.exportPresentation(presentationID: entry.id, render: render) }
+            Button("Edit Timeline…") { timelineEditTarget = entry }
         }
         if AppModel.folderableSections.contains(where: { $0.kind == entry.kind }) {
             Menu("Move to Folder") {
