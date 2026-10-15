@@ -38,6 +38,13 @@ final class ActionRouter {
         controls.timers.timers.map { ($0.id, $0.name) }
     }
 
+    /// Actions that put what is on the outputs right now back: the active
+    /// preset, each layer's media and the live overlays.
+    func liveOutputActions() -> [SlideAction] {
+        controls.state.restoringActions(
+            stack: model.layerStack, presetID: presets.activePresetID)
+    }
+
     var confidenceScreenChoices: [(id: String, name: String)] {
         (confidenceMonitor?.confidenceScreens ?? []).map { ($0.id.uuidString, $0.name) }
     }
@@ -365,7 +372,8 @@ final class ActionRouter {
             guard let mediaID = action.mediaId,
                   let item = model.media(mediaID)
             else { return miss(action, "mediaId") }
-            controls.fire(mediaItem: item)
+            controls.fire(
+                mediaItem: item, layerOverride: SlideSceneBuilder.mediaLayerOverride(of: action))
         case .fireAlert:
             guard let alertID = action.alertId,
                   let preset = try? model.alertPreset(alertID)

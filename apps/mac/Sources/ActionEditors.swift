@@ -1,5 +1,6 @@
 import PresenterCore
 import RenderEngine
+import SlideScene
 import SwiftUI
 
 extension SlideActionKind {
@@ -210,6 +211,16 @@ struct ActionParameterFields: View {
                     }
                 }
             }
+            Picker("Layer", selection: stringBinding(action, \.layer)) {
+                Text("Media\u{2019}s Own Layer").tag("")
+                ForEach(SlideSceneBuilder.mediaLayerKinds.reversed(), id: \.rawValue) { layer in
+                    Text(layer.displayName).tag(layer.rawValue)
+                }
+                ForEach(model.ownLayers, id: \.id) { layer in
+                    Text(layer.name).tag(layer.id)
+                }
+            }
+            .help("Send this media to a layer other than the one it normally plays on")
         case .fireAlert:
             Picker("Alert", selection: stringBinding(action, \.alertId)) {
                 Text("Choose\u{2026}").tag("")
