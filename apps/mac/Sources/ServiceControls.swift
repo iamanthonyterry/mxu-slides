@@ -1067,10 +1067,14 @@ final class ServiceControls {
     @discardableResult
     func fire(
         mediaItem: MediaItem, loopsOverride: Bool? = nil,
-        context: MediaFireContext = .direct
+        context: MediaFireContext = .direct,
+        layerOverride: String? = nil
     ) -> LayerKind {
 
-        let chosen = mediaItem.layerId.flatMap { appModel.layerStack.layer($0)?.id }
+        // A cue can send the media to a layer other than its own; a layer that
+        // no longer exists falls back to the media's.
+        let requested = layerOverride.flatMap { appModel.layerStack.layer($0)?.id }
+        let chosen = requested ?? mediaItem.layerId.flatMap { appModel.layerStack.layer($0)?.id }
         let ownLayer = chosen.flatMap { LayerKind(rawValue: $0) == nil ? $0 : nil }
         let layer = chosen.flatMap(LayerKind.init(rawValue:))
             ?? SlideSceneBuilder.layerKind(CueMedia.dropped(for: mediaItem).layer)

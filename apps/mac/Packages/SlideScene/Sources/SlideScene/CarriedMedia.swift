@@ -80,7 +80,14 @@ extension SlideSceneBuilder {
             switch action.kind {
             case .fireMedia:
                 if let id = action.mediaId, let facts = item(id) {
-                    let layer = layerKind(CueMedia.firedLayer(kind: facts.kind, classification: facts.classification))
+                    let layer: LayerKind
+                    if let override = SlideSceneBuilder.mediaLayerOverride(of: action) {
+                        // Layers the library made are not part of the carried map.
+                        guard let kind = LayerKind(rawValue: override) else { break }
+                        layer = kind
+                    } else {
+                        layer = layerKind(CueMedia.firedLayer(kind: facts.kind, classification: facts.classification))
+                    }
                     live[layer] = CueMedia(mediaId: id, classification: facts.classification)
                 }
             case .clearLayer:

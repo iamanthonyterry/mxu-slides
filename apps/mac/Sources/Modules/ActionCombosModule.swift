@@ -99,6 +99,8 @@ struct ActionCombosModule: View {
                     expanded.insert(id)
                 }
             }
+            Button("Save Live Output as Combo") { saveLiveOutput() }
+                .disabled(router?.liveOutputActions().isEmpty != false)
             Divider()
             Button("New Folder") {
                 model.updateComboBoard { $0.addFolder(named: "New Folder") }
@@ -439,21 +441,42 @@ struct ActionCombosModule: View {
                 }
             }
         case .fireMedia:
-            Button {
-                mediaPick = MediaPickTarget(comboID: comboID, actionID: action.id)
-            } label: {
-                Text(entryName(action.mediaId) ?? "Media\u{2026}")
-                    .font(.system(size: 10))
-                    .lineLimit(1)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
+            HStack(spacing: 4) {
+                Button {
+                    mediaPick = MediaPickTarget(comboID: comboID, actionID: action.id)
+                } label: {
+                    Text(entryName(action.mediaId) ?? "Media\u{2026}")
+                        .font(.system(size: 10))
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(
+                    Color.primary.opacity(0.05),
+                    in: RoundedRectangle.standard(CornerStandard.element)
+                )
+                QuietMenuChip(
+                    title: SlideSceneBuilder.mediaLayerOverride(of: action)
+                        .flatMap { model.layerName($0) } ?? "Own layer"
+                ) {
+                    Button("Media\u{2019}s Own Layer") {
+                        updateAction(comboID, action.id) { $0.layer = nil }
+                    }
+                    Divider()
+                    ForEach(SlideSceneBuilder.mediaLayerKinds.reversed(), id: \.rawValue) { layer in
+                        Button(layer.displayName) {
+                            updateAction(comboID, action.id) { $0.layer = layer.rawValue }
+                        }
+                    }
+                    ForEach(model.ownLayers, id: \.id) { layer in
+                        Button(layer.name) {
+                            updateAction(comboID, action.id) { $0.layer = layer.id }
+                        }
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .background(
-                Color.primary.opacity(0.05),
-                in: RoundedRectangle.standard(CornerStandard.element)
-            )
         case .fireAlert:
             QuietMenuChip(title: entryName(action.alertId) ?? "Alert\u{2026}") {
                 ForEach(entries(of: .alertPreset), id: \.id) { alert in
@@ -872,6 +895,16 @@ struct ActionCombosModule: View {
             guard combo.actions.indices.contains(target) else { return }
             combo.actions.swapAt(index, target)
         }
+    }
+
+    /// A combo that puts the outputs back as they are now: preset, media on
+    /// each layer, overlays. Open it afterward to trim what you don't want.
+    private func saveLiveOutput() {
+        guard let actions = router?.liveOutputActions(), !actions.isEmpty else { return }
+        let stamp = Date.now.formatted(date: .omitted, time: .shortened)
+        guard let id = model.createActionCombo(name: "Live Output \(stamp)") else { return }
+        model.updateActionCombo(id) { $0.actions = actions }
+        expanded.insert(id)
     }
 
     private func duplicate(_ combo: ActionCombo) {

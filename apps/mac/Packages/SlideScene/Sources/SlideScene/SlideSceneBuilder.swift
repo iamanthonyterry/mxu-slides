@@ -540,6 +540,21 @@ public enum SlideSceneBuilder {
         fireActions(for: slide, protected: protectedLayers(for: slide))
     }
 
+    /// The built-in layers a media cue can sit on. Slide, overlays, alerts and
+    /// the video input are not media layers.
+    public static let mediaLayerKinds: [LayerKind] = [.loopingVideos, .stillGraphics, .videos]
+
+    /// The layer a fire-media action sends its media to instead of the media's
+    /// own layer: a built-in media layer or a layer the library made. Nil when
+    /// the action leaves it to the media, or names a layer media cannot sit on.
+    public static func mediaLayerOverride(of action: SlideAction) -> String? {
+        guard action.kind == .fireMedia, let id = action.layer, !id.isEmpty else { return nil }
+        if let kind = LayerKind(rawValue: id) {
+            return mediaLayerKinds.contains(kind) ? id : nil
+        }
+        return id
+    }
+
     public static func protectedLayers(
         for slide: Slide, mediaLayer: (String) -> LayerKind? = { _ in nil }
     ) -> Set<LayerKind> {
@@ -548,7 +563,10 @@ public enum SlideSceneBuilder {
             protected.insert(layerKind(background.layer))
         }
         for action in slide.actions ?? [] where action.kind == .fireMedia {
-            if let id = action.mediaId, let layer = mediaLayer(id) {
+            if let id = mediaLayerOverride(of: action) {
+                // A layer the library made is not tracked as protected.
+                if let kind = LayerKind(rawValue: id) { protected.insert(kind) }
+            } else if let id = action.mediaId, let layer = mediaLayer(id) {
                 protected.insert(layer)
             }
         }
