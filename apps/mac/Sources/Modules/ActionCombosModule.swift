@@ -476,6 +476,26 @@ struct ActionCombosModule: View {
                         }
                     }
                 }
+                QuietMenuChip(
+                    title: ScreenTargeting.summary(action.screenIds) { id in
+                        router?.screenChoices.first { $0.id == id }?.name
+                    }
+                ) {
+                    Button("All Screens") {
+                        updateAction(comboID, action.id) { $0.screenIds = nil }
+                    }
+                    Divider()
+                    ForEach(router?.screenChoices ?? [], id: \.id) { screen in
+                        Toggle(screen.name, isOn: Binding(
+                            get: { action.screenIds?.contains(screen.id) == true },
+                            set: { _ in
+                                updateAction(comboID, action.id) {
+                                    $0.screenIds = ScreenTargeting.toggling(screen.id, in: $0.screenIds)
+                                }
+                            }
+                        ))
+                    }
+                }
             }
         case .fireAlert:
             QuietMenuChip(title: entryName(action.alertId) ?? "Alert\u{2026}") {

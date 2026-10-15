@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 134,
+  "schemaVersion": 135,
   "schemas": {
     "SlideObjectKind": {
       "type": "string",
@@ -1113,6 +1113,12 @@
         },
         "scaleMode": {
           "$ref": "#/components/schemas/MediaScaleMode"
+        },
+        "screenIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -2801,6 +2807,12 @@
         },
         "delaySeconds": {
           "type": "number"
+        },
+        "screenIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [

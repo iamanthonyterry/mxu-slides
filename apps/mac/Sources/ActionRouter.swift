@@ -45,6 +45,14 @@ final class ActionRouter {
             stack: model.layerStack, presetID: presets.activePresetID)
     }
 
+    /// The screens a media cue can be limited to: the displays assigned to
+    /// the show and the audience screens in the preset's layout.
+    var screenChoices: [(id: String, name: String)] {
+        controls.render.audienceScreenTargets
+            .map { ($0, controls.render.outputs.outputName($0)) }
+            .sorted { $0.1.localizedStandardCompare($1.1) == .orderedAscending }
+    }
+
     /// Names slides can read with `{Name}`, for authoring hints.
     var dynamicValueNames: [String] {
         controls.dynamicValues.values.map(\.name)
@@ -378,7 +386,8 @@ final class ActionRouter {
                   let item = model.media(mediaID)
             else { return miss(action, "mediaId") }
             controls.fire(
-                mediaItem: item, layerOverride: SlideSceneBuilder.mediaLayerOverride(of: action))
+                mediaItem: item, layerOverride: SlideSceneBuilder.mediaLayerOverride(of: action),
+                screenIds: ScreenTargeting.normalized(action.screenIds))
         case .fireAlert:
             guard let alertID = action.alertId,
                   let preset = try? model.alertPreset(alertID)

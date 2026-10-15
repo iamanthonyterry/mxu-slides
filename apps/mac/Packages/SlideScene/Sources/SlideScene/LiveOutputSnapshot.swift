@@ -30,7 +30,9 @@ extension ShowState {
         }
         for id in layerIDs {
             guard let cue = liveCue(onLayer: id), !cue.mediaId.isEmpty else { continue }
-            actions.append(SlideAction(id: makeID(), kind: .fireMedia, layer: id, mediaId: cue.mediaId))
+            var fire = SlideAction(id: makeID(), kind: .fireMedia, layer: id, mediaId: cue.mediaId)
+            fire.screenIds = cue.screenIds
+            actions.append(fire)
         }
 
         for overlay in liveOverlays {

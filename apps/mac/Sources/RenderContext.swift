@@ -34,6 +34,19 @@ final class RenderContext {
 
     var liveScreenTargets: Set<String> { Set(screenEngines.value.keys) }
 
+    /// Every screen that shows the audience: displays assigned to the show
+    /// and the audience screens of the layout.
+    var audienceScreenTargets: Set<String> {
+        var targets = Set<String>()
+        for screen in outputs.placeholderScreens where outputs.role(forScreen: screen.id) == .audience {
+            targets.insert(screen.id.uuidString)
+        }
+        for display in outputs.displays where outputs.assignedDisplays.contains(display.uuid) {
+            targets.insert(display.uuid)
+        }
+        return targets
+    }
+
     func screenTargets(shapedUnlike deck: CGSize) -> Set<String> {
         var targets = Set<String>()
         for screen in outputs.placeholderScreens where outputs.role(forScreen: screen.id) == .audience {

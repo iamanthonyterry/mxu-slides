@@ -190,7 +190,8 @@ public struct ShowState: Sendable, Equatable {
 
     public mutating func fire(media: CueMedia, on layer: LayerKind) {
         slideOnlyLayers.remove(layer.rawValue)
-        if liveMedia[layer]?.mediaId == media.mediaId { return }
+        if liveMedia[layer]?.mediaId == media.mediaId,
+           liveMedia[layer]?.screenIds == media.screenIds { return }
         liveMedia[layer] = media
         directMediaFires.insert(layer)
     }
@@ -200,7 +201,10 @@ public struct ShowState: Sendable, Equatable {
             fire(media: media, on: kind)
         } else {
             slideOnlyLayers.remove(id)
-            if liveLayerMedia[id]?.mediaId != media.mediaId { liveLayerMedia[id] = media }
+            if liveLayerMedia[id]?.mediaId != media.mediaId
+                || liveLayerMedia[id]?.screenIds != media.screenIds {
+                liveLayerMedia[id] = media
+            }
         }
     }
 
@@ -651,21 +655,32 @@ public struct ShowState: Sendable, Equatable {
         clear(function: .signage)
     }
 
+    /// Whether any live media is limited to some screens, so those screens
+    /// need a scene of their own.
+    public var hasScreenTargetedMedia: Bool {
+        liveMedia.values.contains { $0.isScreenTargeted }
+            || liveLayerMedia.values.contains { $0.isScreenTargeted }
+    }
+
+    /// - Parameter screenTarget: The screen this scene is for. Media sent to
+    ///   particular screens is left out of the scene of any screen not named;
+    ///   with no target (the program feed, previews) everything shows.
     public func scene(
         canvasSize explicitCanvas: CGSize? = nil,
         alertVisible: Bool = true,
         linkedText info: ConfidenceInfo? = nil,
         slideThemeOverride: Theme? = nil,
+        screenTarget: String? = nil,
         at date: Date = Date()
     ) -> RenderScene {
 
         let canvasSize = explicitCanvas
             ?? SlideSceneBuilder.canvasSize(for: liveSlide?.presentation)
         var scene = RenderScene(canvasSize: canvasSize, layers: Self.renderLayers(for: layerStack))
-        for (layer, media) in liveMedia {
+        for (layer, media) in liveMedia where media.shows(onScreen: screenTarget) {
             scene.addItem(liveMediaItem(media, layerId: layer.rawValue, canvasSize: canvasSize), to: layer)
         }
-        for (id, media) in liveLayerMedia {
+        for (id, media) in liveLayerMedia where media.shows(onScreen: screenTarget) {
             scene.addItem(liveMediaItem(media, layerId: id, canvasSize: canvasSize), toLayer: id)
         }
         if let live = liveSlide {

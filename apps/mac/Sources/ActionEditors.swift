@@ -221,6 +221,27 @@ struct ActionParameterFields: View {
                 }
             }
             .help("Send this media to a layer other than the one it normally plays on")
+            LabeledContent("Screens") {
+                Menu(ScreenTargeting.summary(action.screenIds) { id in
+                    router?.screenChoices.first { $0.id == id }?.name
+                }) {
+                    Button("All Screens") { update(action.id) { $0.screenIds = nil } }
+                    Divider()
+                    ForEach(router?.screenChoices ?? [], id: \.id) { screen in
+                        Toggle(screen.name, isOn: Binding(
+                            get: { action.screenIds?.contains(screen.id) == true },
+                            set: { _ in
+                                update(action.id) {
+                                    $0.screenIds = ScreenTargeting.toggling(screen.id, in: $0.screenIds)
+                                }
+                            }
+                        ))
+                    }
+                }
+                .menuStyle(.button)
+                .fixedSize()
+            }
+            .help("Show this media on only the chosen screens; the others keep what they had")
         case .fireAlert:
             Picker("Alert", selection: stringBinding(action, \.alertId)) {
                 Text("Choose\u{2026}").tag("")

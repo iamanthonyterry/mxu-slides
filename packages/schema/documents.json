@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 134,
+  "schemaVersion": 135,
   "types": {
     "SlideObjectKind": {
       "kind": "enum",
@@ -1398,6 +1398,11 @@
         {
           "name": "scaleMode",
           "type": "MediaScaleMode",
+          "optional": true
+        },
+        {
+          "name": "screenIds",
+          "type": "list:string",
           "optional": true
         }
       ]
@@ -3355,6 +3360,11 @@
         {
           "name": "delaySeconds",
           "type": "double",
+          "optional": true
+        },
+        {
+          "name": "screenIds",
+          "type": "list:string",
           "optional": true
         }
       ]

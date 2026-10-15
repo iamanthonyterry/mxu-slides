@@ -27,6 +27,22 @@ import Testing
     #expect(decoded == object)
 }
 
+@Test func screenTargetsRoundTripAndOldDocumentsStillDecode() throws {
+    var action = SlideAction(id: "a", kind: .fireMedia, layer: "videos", mediaId: "clip")
+    action.screenIds = ["lobby", "stage"]
+    let decoded = try JSONDecoder().decode(SlideAction.self, from: JSONEncoder().encode(action))
+    #expect(decoded.screenIds == ["lobby", "stage"])
+
+    let cue = CueMedia(mediaId: "clip", screenIds: ["lobby"])
+    #expect(try JSONDecoder().decode(CueMedia.self, from: JSONEncoder().encode(cue)) == cue)
+
+    let old = try JSONDecoder().decode(CueMedia.self, from: Data(#"{"mediaId":"clip"}"#.utf8))
+    #expect(old.screenIds == nil)
+    let oldAction = try JSONDecoder().decode(
+        SlideAction.self, from: Data(#"{"id":"a","kind":"fireMedia"}"#.utf8))
+    #expect(oldAction.screenIds == nil)
+}
+
 @Test func actionComboRoundTripsThroughJSON() throws {
 
     let combo = ActionCombo(id: "c1", name: "Sunday Open", actions: [

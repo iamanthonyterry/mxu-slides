@@ -1077,7 +1077,8 @@ final class ServiceControls {
     func fire(
         mediaItem: MediaItem, loopsOverride: Bool? = nil,
         context: MediaFireContext = .direct,
-        layerOverride: String? = nil
+        layerOverride: String? = nil,
+        screenIds: [String]? = nil
     ) -> LayerKind {
 
         // A cue can send the media to a layer other than its own; a layer that
@@ -1111,7 +1112,7 @@ final class ServiceControls {
         state.fire(
             media: CueMedia(
                 mediaId: mediaItem.id, loops: loopsOverride,
-                classification: mediaItem.classification),
+                classification: mediaItem.classification, screenIds: screenIds),
             onLayer: ownLayer ?? layer.rawValue)
         apply()
 
@@ -1601,14 +1602,20 @@ final class ServiceControls {
             variants[themeID] = variant
         }
         var screens: [String: RenderScene] = [:]
-        let screenTargets = render.liveScreenTargets
+        var screenTargets = render.liveScreenTargets
             .union(render.screenTargets(shapedUnlike: base.canvasSize))
             .union(LayerSpans.targets(of: layerSpans))
+        if state.hasScreenTargetedMedia {
+            // Media limited to some screens: each audience screen gets its own
+            // scene, which leaves out the cues meant for the others.
+            screenTargets.formUnion(render.audienceScreenTargets)
+        }
         for target in screenTargets {
             screens[target] = state.scene(
                 alertVisible: alertVisible,
                 linkedText: render.confidenceInfo,
                 slideThemeOverride: screenLooks[target].flatMap { slideThemeOverrides[$0] },
+                screenTarget: target,
                 at: now
             )
             .fitted(toScreen: render.screenSize(target))
