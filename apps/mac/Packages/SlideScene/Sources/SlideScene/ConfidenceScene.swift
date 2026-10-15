@@ -351,6 +351,10 @@ public struct ConfidenceInfo: Sendable, Equatable {
 
     public var captureActive: Bool
 
+    /// Dynamic values by lowercased name. Any text object that writes
+    /// `{Name}` shows the matching value.
+    public var values: [String: String]
+
     public init(
         current: SlideText? = nil,
         next: SlideText? = nil,
@@ -369,7 +373,8 @@ public struct ConfidenceInfo: Sendable, Equatable {
         audioCountdown: VideoCountdown? = nil,
         activeLiveInputIds: [String] = [],
         connectedLiveInputIds: [String] = [],
-        captureActive: Bool = false
+        captureActive: Bool = false,
+        values: [String: String] = [:]
     ) {
         self.current = current
         self.next = next
@@ -389,6 +394,7 @@ public struct ConfidenceInfo: Sendable, Equatable {
         self.activeLiveInputIds = activeLiveInputIds
         self.connectedLiveInputIds = connectedLiveInputIds
         self.captureActive = captureActive
+        self.values = values
     }
 }
 

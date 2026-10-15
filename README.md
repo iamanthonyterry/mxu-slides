@@ -81,6 +81,12 @@ With Settings › Network & API › Draw from iPad enabled, the app serves a sma
 
 The drawable area can be limited to a third or half of the output (Settings › Drawable area); the iPad then shows only that part. Clear All also clears the ink. Slides and combos can control it individually with the Clear Ink, Hide Ink, and Show Ink actions. The relay, stroke model, and page live in `apps/mac/Packages/LocalAPI/Sources/LocalAPI/Ink`; the page is a self-contained `Resources/ink.html`.
 
+### QR codes and dynamic values
+
+Add a QR code from the editor toolbar. Its text is what the code encodes; its fill is the card behind it and its text color is the code's ink. Keep the card opaque and the ink dark for the best scanning from a distance.
+
+A dynamic value is named text that any text box or QR code reads by writing `{Name}` (matched without regard to case; a name that does not exist is left as written). Manage them in Service Controls › Values. A value holds typed text, or follows a plain text file that another tool keeps up to date: the file is read about once a second, and live output redraws when it changes. A file's text wins while it has content; the typed text is the fallback. Values are stored per Mac in the app's preferences and are not part of the library.
+
 ### Local API
 
 With Settings › Local API enabled, the app serves a REST and WebSocket API on port 6980, authenticated by scoped bearer tokens created in the same pane. `GET /v1/status` returns the live slide; `scripts/*.mjs` show it driving a show. The route table and OpenAPI document live in `apps/mac/Packages/LocalAPI`.

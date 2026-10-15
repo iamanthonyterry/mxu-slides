@@ -60,7 +60,7 @@ public enum LinkedText {
         reading: (TextLink) -> TextLink = { $0 }
     ) -> [SlideObject] {
         objects.map { object in
-            guard let stored = object.textLink else { return object }
+            guard let stored = object.textLink else { return withValues(object, info: info) }
             let link = reading(stored)
             var resolved = object
             resolved.text = resolve(link, info: info, at: date) ?? ""
@@ -88,8 +88,20 @@ public enum LinkedText {
                 style.colorHex = ink
                 resolved.textStyle = style
             }
-            return resolved
+            return withValues(resolved, info: info)
         }
+    }
+
+    /// Whether the object's text names a dynamic value that exists.
+    public static func usesValues(_ object: SlideObject, info: ConfidenceInfo) -> Bool {
+        DynamicValues.hasToken(in: object.text, values: info.values)
+    }
+
+    private static func withValues(_ object: SlideObject, info: ConfidenceInfo) -> SlideObject {
+        guard DynamicValues.hasToken(in: object.text, values: info.values) else { return object }
+        var substituted = object
+        substituted.text = DynamicValues.substitute(in: object.text, values: info.values)
+        return substituted
     }
 
     static func slideText(for link: TextLink, in info: ConfidenceInfo) -> ConfidenceInfo.SlideText? {
@@ -206,8 +218,12 @@ public enum LinkedText {
         nextServiceTitle: "Sunday Gathering"
     )
 
-    public static func previewObjects(_ objects: [SlideObject]) -> [SlideObject] {
-        resolvedObjects(objects, info: previewInfo, at: previewDate, reading: previewLink)
+    public static func previewObjects(
+        _ objects: [SlideObject], values: [String: String] = [:]
+    ) -> [SlideObject] {
+        var info = previewInfo
+        info.values = values
+        return resolvedObjects(objects, info: info, at: previewDate, reading: previewLink)
     }
 
     public static func sampleText(for link: TextLink) -> String {

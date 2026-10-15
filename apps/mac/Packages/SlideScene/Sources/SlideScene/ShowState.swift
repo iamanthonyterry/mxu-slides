@@ -715,7 +715,9 @@ public struct ShowState: Sendable, Equatable {
             if let info {
 
                 stack = stack.map { entry in
-                    guard entry.fromTheme, entry.object.textLink != nil else { return entry }
+                    guard entry.fromTheme,
+                          entry.object.textLink != nil || LinkedText.usesValues(entry.object, info: info)
+                    else { return entry }
                     return SlideSceneBuilder.ComposedEntry(
                         object: LinkedText.resolvedObjects([entry.object], info: info, at: date)[0],
                         fromTheme: true

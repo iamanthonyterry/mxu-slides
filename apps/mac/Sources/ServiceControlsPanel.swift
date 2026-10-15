@@ -124,6 +124,7 @@ struct ServiceControlsPanel: View {
         case .mixer: AudioMixerModule(model: model, controls: controls)
         case .media: MediaPlaylistsModule(model: model, controls: controls)
         case .timers: TimersModule(model: model, controls: controls)
+        case .values: ValuesModule(model: model, controls: controls)
         case .tracking: ServiceTrackingModule(model: model, controls: controls)
         case .alerts: AlertsModule(model: model, controls: controls)
         case .overlays: OverlaysModule(model: model, controls: controls)
@@ -236,6 +237,8 @@ struct ServiceControlsPanel: View {
             return signage?.isAnyScreenLive == true ? .green : nil
         case .timers:
             return controls.timers.timers.contains(where: \.isLive) ? .green : nil
+        case .values:
+            return nil
         case .tracking:
             return controls.timers.snapshot(id: ServiceTrackingTimers.id(.item, .remaining))?.isRunning == true ? .green : nil
         case .alerts:

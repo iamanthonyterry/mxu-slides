@@ -11,7 +11,20 @@ import Testing
 
 @Test func slideObjectKindCoversAllCases() {
 
-    #expect(SlideObjectKind.allCases.count == 4)
+    #expect(SlideObjectKind.allCases.count == 5)
+}
+
+@Test func qrCodeObjectRoundTripsThroughJSON() throws {
+    var object = SlideObject(
+        id: "qr", objectKind: .qrCode, name: "Give", text: "https://example.org/give",
+        x: 10, y: 20, width: 300, height: 300
+    )
+    object.fill = ObjectFill(fillKind: .solid, colorHex: "#FFFFFFFF")
+    var style = TextStyle()
+    style.colorHex = "#112233FF"
+    object.textStyle = style
+    let decoded = try JSONDecoder().decode(SlideObject.self, from: JSONEncoder().encode(object))
+    #expect(decoded == object)
 }
 
 @Test func actionComboRoundTripsThroughJSON() throws {

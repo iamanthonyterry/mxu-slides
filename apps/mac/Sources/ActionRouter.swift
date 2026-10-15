@@ -38,6 +38,11 @@ final class ActionRouter {
         controls.timers.timers.map { ($0.id, $0.name) }
     }
 
+    /// Names slides can read with `{Name}`, for authoring hints.
+    var dynamicValueNames: [String] {
+        controls.dynamicValues.values.map(\.name)
+    }
+
     var confidenceScreenChoices: [(id: String, name: String)] {
         (confidenceMonitor?.confidenceScreens ?? []).map { ($0.id.uuidString, $0.name) }
     }
