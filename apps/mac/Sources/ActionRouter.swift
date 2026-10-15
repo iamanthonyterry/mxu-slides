@@ -45,6 +45,11 @@ final class ActionRouter {
             stack: model.layerStack, presetID: presets.activePresetID)
     }
 
+    /// Names slides can read with `{Name}`, for authoring hints.
+    var dynamicValueNames: [String] {
+        controls.dynamicValues.values.map(\.name)
+    }
+
     var confidenceScreenChoices: [(id: String, name: String)] {
         (confidenceMonitor?.confidenceScreens ?? []).map { ($0.id.uuidString, $0.name) }
     }

@@ -28,6 +28,11 @@ public enum SlideSceneBuilder {
             )
         case .media, .shape, .liveInput:
             CGRect(origin: .zero, size: canvas)
+        case .qrCode:
+            QRCode.square(in: CGRect(
+                x: canvas.width * 0.1, y: canvas.height * 0.1,
+                width: canvas.width * 0.8, height: canvas.height * 0.8
+            ))
         }
     }
 
@@ -665,9 +670,11 @@ public enum SlideSceneBuilder {
     ) -> RenderItem {
 
         let object = SlideObjectNormalization.normalized(object)
+        var objectFrame = frame(for: object, placeholder: placeholder, in: canvas)
+        if object.objectKind == .qrCode { objectFrame = QRCode.square(in: objectFrame) }
         return RenderItem(
             id: object.id,
-            frame: frame(for: object, placeholder: placeholder, in: canvas),
+            frame: objectFrame,
             content: content(for: object, theme: theme, placeholder: placeholder, music: music),
             rotationDegrees: object.rotationDegrees ?? 0,
             tilt: object.tilt ?? 0,
@@ -818,15 +825,32 @@ public enum SlideSceneBuilder {
         func stampStates(_ item: inout RenderItem) {
             guard !stateItems.isEmpty else { return }
             let wantsText = item.id.hasSuffix("::text")
+            let wantsCode = item.id.hasSuffix("::qr")
             item.animationSteps = item.animationSteps.map { step in
                 var step = step
                 guard let items = stateItems[step.id],
-                      let match = items.first(where: { $0.id.hasSuffix("::text") == wantsText }) else { return step }
+                      let match = items.first(where: {
+                          $0.id.hasSuffix("::qr") == wantsCode && $0.id.hasSuffix("::text") == wantsText
+                      }) else { return step }
                 if step.kind == .morph { step.toItem = match } else { step.fromItem = match }
                 return step
             }
         }
         stampStates(&primary)
+        if object.objectKind == .qrCode {
+            guard let matrix = QRCode.matrix(for: object.text) else { return [primary] }
+            var code = primary
+            code.id = "\(id)::qr"
+            code.frame = QRCode.codeFrame(inSquare: primary.frame, matrix: matrix)
+            code.content = .shape(ShapeStyle(
+                kind: .path(QRCode.pathData(for: matrix)),
+                fill: .solid(qrForeground(for: object))
+            ))
+            code.effects = primary.effectsApplyBelow ? [] : primary.effects
+            code.effectsApplyBelow = false
+            stampStates(&code)
+            return [primary, code]
+        }
         guard object.objectKind == .shape,
               !object.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return [primary] }
@@ -966,7 +990,21 @@ public enum SlideSceneBuilder {
         case .shape, .media, .liveInput:
 
             .shape(shapeStyle(for: object))
+        case .qrCode:
+
+            .shape(ShapeStyle(kind: .rectangle, fill: qrBackground(for: object)))
         }
+    }
+
+    /// A QR object has no fields of its own: its fill is the card behind the
+    /// code (white when unset) and its text color is the code's ink (black
+    /// when unset), because the code is a drawing of its text.
+    static func qrBackground(for object: SlideObject) -> SceneFill {
+        object.fill == nil ? .solid(.white) : fill(object.fill)
+    }
+
+    static func qrForeground(for object: SlideObject) -> SceneColor {
+        object.textStyle?.colorHex.flatMap(ColorHex.color) ?? SceneColor(red: 0, green: 0, blue: 0)
     }
 
     static func styledText(

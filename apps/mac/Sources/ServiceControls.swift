@@ -22,6 +22,8 @@ final class ServiceControls {
 
     let timers: TimersController
 
+    let dynamicValues: DynamicValuesController
+
     let media: MediaTransportController
 
     let recording: RecordingController
@@ -41,6 +43,7 @@ final class ServiceControls {
         self.audio = AudioController(appModel: appModel, media: render.media)
         self.timers = TimersController(render: render)
         self.timers.moveUndo = appModel.moveUndo
+        self.dynamicValues = DynamicValuesController(render: render)
         self.media = MediaTransportController(appModel: appModel, render: render)
         self.recording = RecordingController(render: render)
         self.streaming = StreamingController(render: render)
@@ -49,6 +52,8 @@ final class ServiceControls {
         appModel.decks.onFillLanded = { [weak self] id in
             self?.presentationFillDidLand(id)
         }
+
+        dynamicValues.onChange = { [weak self] in self?.apply() }
 
         NDIScreenOutputs.shared.restore(render: render)
         DeckLinkScreenOutputs.shared.restore(render: render)

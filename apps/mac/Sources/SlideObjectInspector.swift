@@ -535,6 +535,10 @@ struct SlideObjectInspector: View {
                         textPathSection(object, forShape: true)
                     }
                 }
+            case .qrCode:
+                if !multi {
+                    qrCodeSection(object)
+                }
             }
             if !multi {
                 maskSection(object)
@@ -965,6 +969,62 @@ struct SlideObjectInspector: View {
                     .font(.body)
                     .frame(minHeight: 64)
                     .focused($textEditorFocused)
+            }
+        }
+    }
+
+    private func qrBackgroundBinding(_ object: SlideObject) -> Binding<String> {
+        Binding(
+            get: {
+                let fill = current(object).fill
+                return fill?.fillKind == .solid ? (fill?.colorHex ?? "#FFFFFFFF") : "#FFFFFFFF"
+            },
+            set: { hex in
+                commit(object) { obj in
+                    var fill = obj.fill ?? ObjectFill(fillKind: .solid)
+                    fill.fillKind = .solid
+                    fill.colorHex = hex
+                    obj.fill = fill
+                }
+            }
+        )
+    }
+
+    private func qrCodeSection(_ object: SlideObject) -> some View {
+        let payload = current(object).text
+        let values = router?.dynamicValueNames ?? []
+        return InspectorSection("QR Code") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Link or text to encode")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: write(object, \.text))
+                    .font(.body.monospaced())
+                    .frame(minHeight: 64)
+                    .focused($textEditorFocused)
+            }
+            if payload.isEmpty {
+                Text("Nothing to encode yet. Type a web address, a phone number, or any text.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if QRCode.matrix(for: payload) == nil {
+                Text("This is too long for one QR code. Shorten the text.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            HexColorRow(
+                label: "Code Color",
+                hex: styleWrite(object, \.colorHex, default: "#000000FF")
+            )
+            HexColorRow(label: "Background", hex: qrBackgroundBinding(object))
+            Text("Keep the code dark on light, with the background opaque, so phones read it from the back of the room.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            if !values.isEmpty {
+                Text("Values you can use: " + values.map(DynamicValues.token(for:)).joined(separator: " "))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
             }
         }
     }
@@ -1516,6 +1576,7 @@ struct SlideObjectInspector: View {
         let object = SlideObjectNormalization.normalized(object)
         switch object.objectKind {
         case .text: return "Text"
+        case .qrCode: return "QR Code"
         case .shape, .media, .liveInput:
             guard let fill = object.fill, fill.fillKind == .media else { return "Shape" }
 

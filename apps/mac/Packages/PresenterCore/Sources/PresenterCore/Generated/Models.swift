@@ -5,6 +5,7 @@ public enum SlideObjectKind: String, Codable, Sendable, CaseIterable, Equatable 
     case media
     case shape
     case liveInput
+    case qrCode
 }
 
 public enum BlendMode: String, Codable, Sendable, CaseIterable, Equatable {

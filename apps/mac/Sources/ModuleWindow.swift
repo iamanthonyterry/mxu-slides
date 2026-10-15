@@ -27,6 +27,7 @@ struct ModuleWindowView: View {
                         case .mixer: AudioMixerModule(model: model, controls: controls)
                         case .media: MediaPlaylistsModule(model: model, controls: controls)
                         case .timers: TimersModule(model: model, controls: controls)
+                        case .values: ValuesModule(model: model, controls: controls)
                         case .tracking: ServiceTrackingModule(model: model, controls: controls)
                         case .alerts: AlertsModule(model: model, controls: controls)
                         case .overlays: OverlaysModule(model: model, controls: controls)

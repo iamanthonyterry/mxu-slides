@@ -1081,6 +1081,7 @@ struct SlideEditorView: View {
         let object = SlideObjectNormalization.normalized(object)
         switch object.objectKind {
         case .text: return "textformat"
+        case .qrCode: return "qrcode"
         case .shape, .media, .liveInput:
 
             guard let fill = object.fill, fill.fillKind == .media else {
@@ -1164,6 +1165,12 @@ struct SlideEditorView: View {
                 Label("Add Shape", systemImage: "rectangle")
             }
             .help("Add Shape")
+            Button {
+                model.addQRCodeObject()
+            } label: {
+                Label("Add QR Code", systemImage: "qrcode")
+            }
+            .help("Add a QR code — a link, a phone number, any text; it can read dynamic values")
             Button {
                 showingMediaPicker = true
             } label: {

@@ -1229,6 +1229,16 @@ final class SlideEditorModel {
         ))
     }
 
+    func addQRCodeObject() {
+        let side = min(canvasSize.width, canvasSize.height) * 0.45
+        add(SlideObject(
+            id: UUID().uuidString, objectKind: .qrCode, name: "QR Code", text: "https://example.org",
+            x: (canvasSize.width - side) / 2,
+            y: (canvasSize.height - side) / 2,
+            width: side, height: side
+        ))
+    }
+
     func addShapeObject() {
         let size = CGSize(width: 400, height: 300)
         add(SlideObject(
@@ -3087,7 +3097,17 @@ final class SlideEditorModel {
 
         if restingGhost { insertRestingGhost(into: &slide) }
 
-        slide.objects = LinkedText.previewObjects(slide.objects)
+        let rawObjects = slide.objects
+        slide.objects = LinkedText.previewObjects(
+            rawObjects, values: render?.confidenceInfo.values ?? [:]
+        )
+
+        // Text being typed on the canvas keeps its `{Name}` tokens.
+        if let editing = canvasTextEditID,
+           let index = rawObjects.firstIndex(where: { $0.id == editing }),
+           index < slide.objects.count, slide.objects[index].id == editing {
+            slide.objects[index].text = rawObjects[index].text
+        }
 
         var shownPresentation = presentation
         if showsChords {
