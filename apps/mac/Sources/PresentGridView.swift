@@ -1182,6 +1182,12 @@ struct SlideGridBody: View {
                         removeSlideAction(action.id, from: slide)
                     }
                 }
+                if slideActions.count > 1 {
+                    Divider()
+                    Button("All Actions", role: .destructive) {
+                        removeAllSlideActions(from: slide)
+                    }
+                }
             }
         }
 
@@ -1510,6 +1516,12 @@ struct SlideGridBody: View {
             actions.removeAll { $0.id == actionID }
 
             target.actions = actions.isEmpty ? nil : actions
+        }
+    }
+
+    private func removeAllSlideActions(from slide: Slide) {
+        model.updateSlide(presentationID: presentation.id, slideID: slide.id, undoLabel: "Remove Actions") { target in
+            target.actions = nil
         }
     }
 

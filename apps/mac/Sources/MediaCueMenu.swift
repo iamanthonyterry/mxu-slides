@@ -160,6 +160,12 @@ struct MediaCueGrammarItems: View {
                             }
                         }
                     }
+                    if actions.count > 1 {
+                        Divider()
+                        Button("All Actions", role: .destructive) {
+                            model.updateMedia(mediaID) { $0.actions = nil }
+                        }
+                    }
                 }
             }
             Button(item.autoAdvance == nil ? "Auto Advance…" : "Auto Advance… ✓") {
