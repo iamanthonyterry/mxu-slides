@@ -2202,6 +2202,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "canvasWidth": {
+          "type": "integer"
+        },
+        "canvasHeight": {
+          "type": "integer"
         }
       },
       "required": [
@@ -2438,6 +2444,12 @@
           "items": {
             "$ref": "#/components/schemas/Slide"
           }
+        },
+        "canvasWidth": {
+          "type": "integer"
+        },
+        "canvasHeight": {
+          "type": "integer"
         }
       },
       "required": [

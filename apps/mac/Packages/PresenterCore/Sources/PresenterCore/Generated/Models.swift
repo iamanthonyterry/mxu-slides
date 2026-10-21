@@ -1405,8 +1405,10 @@ public struct Overlay: Codable, Sendable, Equatable, Identifiable {
     public var layer: String?
     public var animationOrder: [String]?
     public var buildOrder: [String]?
+    public var canvasWidth: Int?
+    public var canvasHeight: Int?
 
-    public init(id: String, name: String, objects: [SlideObject], folder: String? = nil, folderId: String? = nil, layer: String? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil) {
+    public init(id: String, name: String, objects: [SlideObject], folder: String? = nil, folderId: String? = nil, layer: String? = nil, animationOrder: [String]? = nil, buildOrder: [String]? = nil, canvasWidth: Int? = nil, canvasHeight: Int? = nil) {
         self.id = id
         self.name = name
         self.objects = objects
@@ -1415,6 +1417,8 @@ public struct Overlay: Codable, Sendable, Equatable, Identifiable {
         self.layer = layer
         self.animationOrder = animationOrder
         self.buildOrder = buildOrder
+        self.canvasWidth = canvasWidth
+        self.canvasHeight = canvasHeight
     }
 }
 
@@ -1561,8 +1565,10 @@ public struct Theme: Codable, Sendable, Equatable, Identifiable {
     public var textColorHex: String
     public var backgroundColorHex: String
     public var slides: [Slide]?
+    public var canvasWidth: Int?
+    public var canvasHeight: Int?
 
-    public init(id: String, name: String, fontFamily: String, fontSize: Double, textColorHex: String, backgroundColorHex: String, slides: [Slide]? = nil) {
+    public init(id: String, name: String, fontFamily: String, fontSize: Double, textColorHex: String, backgroundColorHex: String, slides: [Slide]? = nil, canvasWidth: Int? = nil, canvasHeight: Int? = nil) {
         self.id = id
         self.name = name
         self.fontFamily = fontFamily
@@ -1570,6 +1576,8 @@ public struct Theme: Codable, Sendable, Equatable, Identifiable {
         self.textColorHex = textColorHex
         self.backgroundColorHex = backgroundColorHex
         self.slides = slides
+        self.canvasWidth = canvasWidth
+        self.canvasHeight = canvasHeight
     }
 }
 

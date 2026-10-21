@@ -2615,6 +2615,16 @@
           "name": "buildOrder",
           "type": "list:string",
           "optional": true
+        },
+        {
+          "name": "canvasWidth",
+          "type": "int",
+          "optional": true
+        },
+        {
+          "name": "canvasHeight",
+          "type": "int",
+          "optional": true
         }
       ]
     },
@@ -2850,6 +2860,16 @@
         {
           "name": "slides",
           "type": "list:Slide",
+          "optional": true
+        },
+        {
+          "name": "canvasWidth",
+          "type": "int",
+          "optional": true
+        },
+        {
+          "name": "canvasHeight",
+          "type": "int",
           "optional": true
         }
       ]

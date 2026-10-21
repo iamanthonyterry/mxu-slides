@@ -370,7 +370,8 @@ final class SlideEditorModel {
     private static func mirror(of theme: Theme) -> Presentation {
         Presentation(
             id: theme.id, name: theme.name, presentationKind: .deck,
-            themeId: "", slides: theme.slides ?? []
+            themeId: "", slides: theme.slides ?? [],
+            canvasWidth: theme.canvasWidth, canvasHeight: theme.canvasHeight
         )
     }
 
@@ -378,7 +379,8 @@ final class SlideEditorModel {
         Presentation(
             id: overlay.id, name: overlay.name, presentationKind: .deck,
             themeId: "",
-            slides: [Slide(id: overlay.id, name: overlay.name, objects: overlay.objects, animationOrder: overlay.animationOrder)]
+            slides: [Slide(id: overlay.id, name: overlay.name, objects: overlay.objects, animationOrder: overlay.animationOrder)],
+            canvasWidth: overlay.canvasWidth, canvasHeight: overlay.canvasHeight
         )
     }
 
@@ -2703,12 +2705,16 @@ final class SlideEditorModel {
                     var mirror = Self.mirror(of: theme)
                     mutate(&mirror)
                     theme.slides = mirror.slides
+                    theme.canvasWidth = mirror.canvasWidth
+                    theme.canvasHeight = mirror.canvasHeight
                 })
             case .overlay(let document):
                 presentation = Self.mirror(of: try document.update { overlay in
                     var mirror = Self.mirror(of: overlay)
                     mutate(&mirror)
                     overlay.objects = mirror.slides.first?.objects ?? []
+                    overlay.canvasWidth = mirror.canvasWidth
+                    overlay.canvasHeight = mirror.canvasHeight
                 })
             case .confidenceLayout(let document):
                 presentation = Self.mirror(of: try document.update { layout in
