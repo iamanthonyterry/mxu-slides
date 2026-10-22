@@ -18,7 +18,6 @@ public enum DocumentKind: String, CaseIterable, Sendable {
     case controlBoard
     case confidenceLayout
     case groupPalette
-    case signageBoard
     case effectPresetBoard
     case animationPresetBoard
     case layerStack
@@ -30,6 +29,8 @@ public enum DocumentKind: String, CaseIterable, Sendable {
     case slideBuildingSettings
     case font
     case workspaceSettings
+    case trackChannelList
+    case trackSet
 
     public var opensInEditor: Bool {
         switch self {
@@ -59,7 +60,6 @@ public enum DocumentKind: String, CaseIterable, Sendable {
         case .controlBoard: "control-boards"
         case .confidenceLayout: "confidence-layouts"
         case .groupPalette: "groups"
-        case .signageBoard: "signage"
         case .effectPresetBoard: "effect-presets"
         case .animationPresetBoard: "animation-presets"
         case .layerStack: "layer-stack"
@@ -72,6 +72,8 @@ public enum DocumentKind: String, CaseIterable, Sendable {
 
         case .font: "font-files"
         case .workspaceSettings: "workspace-settings"
+        case .trackChannelList: "track-channels"
+        case .trackSet: "track-sets"
         }
     }
 }
@@ -263,17 +265,6 @@ extension MIDIDevice: DocumentEntity {
     public static var documentKind: DocumentKind { .midiDevice }
 }
 
-extension SignageBoard: DocumentEntity {
-    public static var documentKind: DocumentKind { .signageBoard }
-
-    public var name: String { "Digital Signage" }
-}
-
-public extension SignageBoard {
-
-    static let wellKnownID = "signage-board"
-}
-
 extension ConfidenceLayout: DocumentEntity {
     public static var documentKind: DocumentKind { .confidenceLayout }
 
@@ -317,6 +308,21 @@ extension WorkspaceSettings: DocumentEntity {
 public extension WorkspaceSettings {
 
     static let wellKnownID = "workspace-settings"
+}
+
+extension TrackChannelList: DocumentEntity {
+    public static var documentKind: DocumentKind { .trackChannelList }
+
+    public var name: String { "Track Channels" }
+}
+
+public extension TrackChannelList {
+
+    static let wellKnownID = "track-channels"
+}
+
+extension TrackSet: DocumentEntity {
+    public static var documentKind: DocumentKind { .trackSet }
 }
 
 extension FontFile: DocumentEntity {

@@ -318,12 +318,13 @@ public final class ResidentLibrary {
     public let schedulerBoards: ResidentDocuments<SchedulerBoard>
     public let controlBoards: ResidentDocuments<ControlBoard>
     public let groupPalettes: ResidentDocuments<GroupPalette>
-    public let signageBoards: ResidentDocuments<SignageBoard>
     public let effectPresetBoards: ResidentDocuments<EffectPresetBoard>
     public let animationPresetBoards: ResidentDocuments<AnimationPresetBoard>
     public let layerStacks: ResidentDocuments<LayerStack>
     public let serviceLinkRules: ResidentDocuments<ServiceLinkRules>
     public let slideBuildingSettings: ResidentDocuments<SlideBuildingSettings>
+    public let trackChannelLists: ResidentDocuments<TrackChannelList>
+    public let trackSets: ResidentDocuments<TrackSet>
     public let outputPresets: ResidentDocuments<OutputPreset>
     public let midiDevices: ResidentDocuments<MIDIDevice>
 
@@ -333,8 +334,9 @@ public final class ResidentLibrary {
         .media, .audio, .theme, .service, .playlist, .overlay,
         .alertPreset, .streamRecordPreset, .streamDestination, .actionCombo,
         .scheduleTrigger, .confidenceLayout, .schedulerBoard,
-        .controlBoard, .groupPalette, .signageBoard, .effectPresetBoard,
+        .controlBoard, .groupPalette, .effectPresetBoard,
         .animationPresetBoard, .layerStack, .serviceLinkRules, .slideBuildingSettings, .outputPreset, .midiDevice,
+        .trackChannelList, .trackSet,
     ]
 
     public convenience init(store: DocumentStore, epochs: DocumentKindVersions, fills: DocumentKindVersions) {
@@ -357,7 +359,6 @@ public final class ResidentLibrary {
         schedulerBoards = .init(source: source, epochs: epochs, fills: fills)
         controlBoards = .init(source: source, epochs: epochs, fills: fills)
         groupPalettes = .init(source: source, epochs: epochs, fills: fills)
-        signageBoards = .init(source: source, epochs: epochs, fills: fills)
         effectPresetBoards = .init(source: source, epochs: epochs, fills: fills)
         animationPresetBoards = .init(source: source, epochs: epochs, fills: fills)
         layerStacks = .init(source: source, epochs: epochs, fills: fills)
@@ -365,12 +366,15 @@ public final class ResidentLibrary {
         slideBuildingSettings = .init(source: source, epochs: epochs, fills: fills)
         outputPresets = .init(source: source, epochs: epochs, fills: fills)
         midiDevices = .init(source: source, epochs: epochs, fills: fills)
+        trackChannelLists = .init(source: source, epochs: epochs, fills: fills)
+        trackSets = .init(source: source, epochs: epochs, fills: fills)
         all = [
             media, audio, themes, services, playlists, overlays,
             alertPresets, streamPresets, streamDestinations, actionCombos,
             scheduleTriggers, confidenceLayouts, schedulerBoards,
-            controlBoards, groupPalettes, signageBoards, effectPresetBoards,
+            controlBoards, groupPalettes, effectPresetBoards,
             animationPresetBoards, layerStacks, serviceLinkRules, slideBuildingSettings, outputPresets, midiDevices,
+            trackChannelLists, trackSets,
         ]
     }
 

@@ -234,9 +234,11 @@ struct DeckField {
             optional(\.chordProSource, "chordProSource"),
             optional(\.musicKey, "musicKey"),
             optional(\.autoAdvance, "autoAdvance"),
+            optional(\.transition, "transition"),
             optional(\.displayKey, "displayKey"),
             optional(\.origin, "origin"),
-            optional(\.timeline, "timeline"),
+            optional(\.timelines, "timelines"),
+            optional(\.songMap, "songMap"),
         ]
     }
 }

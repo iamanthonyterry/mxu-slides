@@ -1,4 +1,6 @@
 import AVFoundation
+import AppKit
+import AudioEngine
 import Foundation
 import MediaEngine
 import NDIKit
@@ -32,6 +34,12 @@ final class ServiceControls {
 
     let mixer: AudioMixerController
 
+    let timeline = PresentationTimelineController()
+
+    let timecode = TimecodeFollower()
+
+    let tracks = TracksController()
+
     private var liveMediaIDs: Set<String> = []
 
     private var transitionResweepScheduled = false
@@ -48,12 +56,30 @@ final class ServiceControls {
         self.recording = RecordingController(render: render)
         self.streaming = StreamingController(render: render)
         self.mixer = AudioMixerController(audio: audio)
+        self.timeline.controls = self
+        self.timecode.controls = self
+        tracks.model = appModel
+        tracks.mixer = mixer
+        mixer.tracks = tracks
+        tracks.onFoundPlaying = { [weak self] status in self?.timeline.resume(fromTracks: status) }
+        tracks.start()
+
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tracks.quit() }
+        }
+
+        timecode.start()
 
         appModel.decks.onFillLanded = { [weak self] id in
             self?.presentationFillDidLand(id)
         }
 
         dynamicValues.onChange = { [weak self] in self?.apply() }
+        appModel.observeMediaFileChanges(self) { [weak self] id in
+            self?.reloadLiveMedia(id)
+        }
 
         NDIScreenOutputs.shared.restore(render: render)
         DeckLinkScreenOutputs.shared.restore(render: render)
@@ -412,8 +438,6 @@ final class ServiceControls {
 
     weak var actionRouter: ActionRouter?
 
-    weak var signage: SignageController?
-
     weak var ink: InkController? {
         didSet { ink?.onVisibilityChange = { [weak self] in self?.apply() } }
     }
@@ -424,15 +448,17 @@ final class ServiceControls {
 
     func fire(
         slide: Slide, in presentation: Presentation, arrangementId: String? = nil,
-        contextID: String? = nil, occurrence: Int? = nil
+        contextID: String? = nil, occurrence: Int? = nil, slideActions: Bool = true
     ) {
 
         settlePending()
-        let incoming = actionRouter?.predictedOverrideThemes(for: slide, contextID: contextID) ?? Array(slideThemeOverrides.values)
+        let routed = slideActions ? slide : Self.withoutActions(slide)
+        let incoming = actionRouter?.predictedOverrideThemes(for: routed, contextID: contextID) ?? Array(slideThemeOverrides.values)
         let handoff = state.handoff(to: slide, incomingOverrides: incoming)
         if handoff.wait > 0 {
             state.dismissLooks(handoff.leaving, atHostTime: CACurrentMediaTime())
             apply()
+            deferring(slide, in: presentation, why: "hand off \(handoff.wait)s")
             let settled = nextFireArrivesSettled
             pendingHandoff = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(handoff.wait))
@@ -440,7 +466,9 @@ final class ServiceControls {
                 self.pendingHandoff = nil
                 self.nextFireArrivesSettled = settled
                 defer { self.nextFireArrivesSettled = false }
-                self.fire(slide: slide, in: presentation, arrangementId: arrangementId, contextID: contextID, occurrence: occurrence)
+                self.fire(
+                    slide: slide, in: presentation, arrangementId: arrangementId, contextID: contextID,
+                    occurrence: occurrence, slideActions: slideActions)
             }
             return
         }
@@ -448,8 +476,11 @@ final class ServiceControls {
         let themeID = presentation.themeId(for: slide)
         switch appModel.resident.themes.fireRead(themeID) {
         case .now(let theme):
-            land(slide: slide, in: presentation, theme: theme, arrangementId: arrangementId, contextID: contextID, occurrence: occurrence)
+            land(
+                slide: slide, in: presentation, theme: theme, arrangementId: arrangementId, contextID: contextID,
+                occurrence: occurrence, slideActions: slideActions)
         case .afterFill:
+            deferring(slide, in: presentation, why: "theme fill")
             let settled = nextFireArrivesSettled
             pendingHandoff = Task { @MainActor [weak self] in
                 await self?.appModel.themesFilled([themeID])
@@ -458,22 +489,30 @@ final class ServiceControls {
                     self.nextFireArrivesSettled = settled
                     self.land(
                         slide: slide, in: presentation, theme: self.appModel.theme(themeID),
-                        arrangementId: arrangementId, contextID: contextID, occurrence: occurrence)
+                        arrangementId: arrangementId, contextID: contextID, occurrence: occurrence,
+                        slideActions: slideActions)
                     self.nextFireArrivesSettled = false
                 }
             }
         }
     }
 
+    private static func withoutActions(_ slide: Slide) -> Slide {
+        var bare = slide
+        bare.actions = nil
+        return bare
+    }
+
     private func land(
         slide: Slide, in presentation: Presentation, theme: Theme?, arrangementId: String?,
-        contextID: String?, occurrence: Int?
+        contextID: String?, occurrence: Int?, slideActions: Bool
     ) {
 
-        actionRouter?.applyPresetSwitches(for: slide, contextID: contextID)
+        actionRouter?.applyPresetSwitches(for: slideActions ? slide : Self.withoutActions(slide), contextID: contextID)
 
-        if let own = RenderContext.sceneTransition(from: slide.transition) {
-            render.nextLiveTransitions[.slide] = own
+        if let entrance = RenderContext.sceneTransition(
+            from: TransitionEdit.entrance(own: slide.transition, presentation: presentation.transition)) {
+            render.nextLiveTransitions[.slide] = entrance
         }
         let deckWasLive = livePresentationID == presentation.id
         state.fire(
@@ -484,10 +523,18 @@ final class ServiceControls {
 
             arrivesSettled: nextFireArrivesSettled
         )
+
+        for (layer, cue) in state.liveMedia where layer != .slide {
+            if let entrance = RenderContext.sceneTransition(
+                from: TransitionEdit.entrance(own: appModel.media(cue.mediaId)?.transition, presentation: presentation.transition)) {
+                render.nextLiveTransitions[layer] = entrance
+            }
+        }
         liveContextID = contextID
         liveOccurrence = occurrence
 
         serviceTracking?.noteItemFired(serviceItemID: contextID)
+        DiagnosticsStore.shared.note("fire.slide", detail: "\(presentation.name) › \(slide.name) actions=\(slide.actions?.count ?? 0)")
         refreshNextSlide()
         apply()
 
@@ -507,7 +554,11 @@ final class ServiceControls {
             restart(mediaID: background.mediaId)
         }
 
-        actionRouter?.slideDidFire(slide, contextID: contextID)
+        if slideActions {
+            actionRouter?.slideDidFire(slide, contextID: contextID)
+        }
+
+        timeline.noteSlideLanded(contextID: contextID, occurrence: occurrence)
         armAutoAdvance(for: slide, in: presentation)
 
         if !deckWasLive {
@@ -543,7 +594,16 @@ final class ServiceControls {
 
     private var pendingSwitch: (() -> Void)?
 
+    private func deferring(_ slide: Slide, in presentation: Presentation, why: String) {
+        cancelAutoAdvance()
+        cancelMediaAdvance()
+        DiagnosticsStore.shared.note("fire.deferred", detail: "\(presentation.name) › \(slide.name): \(why)")
+    }
+
     private func settlePending() {
+        if pendingHandoff != nil {
+            DiagnosticsStore.shared.note("fire.cancelled", detail: "pending hand off cut through by this fire or clear")
+        }
         pendingHandoff?.cancel()
         pendingHandoff = nil
         if let activate = pendingSwitch {
@@ -1068,8 +1128,6 @@ final class ServiceControls {
 
         case direct
 
-        case playlistWalk
-
         case serviceItem(id: String)
     }
 
@@ -1123,7 +1181,6 @@ final class ServiceControls {
         actionRouter?.mediaDidFire(mediaItem, on: layer)
         switch context {
         case .direct: cancelMediaAdvance()
-        case .playlistWalk: break
         case .serviceItem(let id):
             armMediaAdvance(for: mediaItem, serviceItemID: id)
             serviceTracking?.noteItemFired(serviceItemID: id)
@@ -1172,8 +1229,15 @@ final class ServiceControls {
         apply()
     }
 
-    func stopAudio(audioItemID: String) {
-        if let cue = audio.stop(audioItemID: audioItemID) { state.dismissAudio(cue) }
+    func stopAudio(audioItemID: String, fade: TimeInterval? = nil, curve: AudioFadeCurve = .linear) {
+        if let cue = audio.stop(audioItemID: audioItemID, fade: fade, curve: curve) { state.dismissAudio(cue) }
+        apply()
+    }
+
+    func fire(musicClip clip: TimelineMusicClip) {
+        let replaced = audio.play(clip: clip)
+        for cue in replaced { state.dismissAudio(cue) }
+        state.fire(audio: CueAudio(audioItemId: clip.item.id))
         apply()
     }
 
@@ -1281,8 +1345,8 @@ final class ServiceControls {
 
     func clear(function: ShowFunction) {
         settlePending()
-        if function == .media {
-            stashExitTransition(for: Array(state.liveMedia.keys))
+        if function == .media || function == .inputs {
+            stashExitTransition(for: state.liveMedia.filter { $0.value.showFunction == function }.keys)
         }
 
         state.clear(function: function, atHostTime: CACurrentMediaTime())
@@ -1293,7 +1357,7 @@ final class ServiceControls {
             refreshNextSlide()
         }
         if function == .audio { audio.stop() }
-        if function == .signage { signage?.clearAllChannels() }
+        if TracksClear.stopsTracks(sweeping: [function]) { timeline.clearTracks() }
         apply()
         if function == .alerts { syncFlashClock() }
     }
@@ -1359,14 +1423,12 @@ final class ServiceControls {
     func clearAll(protecting: Set<LayerKind> = [], cancelsPendingActions: Bool = true) {
         settlePending()
         if cancelsPendingActions { actionRouter?.cancelPendingDelayedActions() }
-        let includeAudio = UserDefaults.standard.object(
-            forKey: Self.clearAllIncludesAudioKey
-        ) as? Bool ?? true
-        state.clearAll(includingAudio: includeAudio, protecting: protecting)
-        if includeAudio { audio.stop() }
 
-        signage?.clearAllChannels()
         ink?.clear()
+        let swept = ClearAllScope.swept()
+        state.clearAll(sweeping: swept, protecting: protecting)
+        if swept.contains(.audio) { audio.stop() }
+        if TracksClear.stopsTracks(sweeping: swept) { timeline.clearTracks() }
 
         if state.liveSlide == nil {
             liveContextID = nil
@@ -1379,14 +1441,18 @@ final class ServiceControls {
         syncFlashClock()
     }
 
+    func audioFileURL(_ item: AudioItem) -> URL? {
+        blobs?.url(forHash: item.fileHash)
+    }
+
     func hasContent(function: ShowFunction) -> Bool {
         switch function {
         case .slides: state.liveSlide != nil
-        case .media: !state.liveMedia.isEmpty || !state.liveLayerMedia.isEmpty
+        case .media, .inputs: state.liveMedia.values.contains { $0.showFunction == function }
+            || (function == .media && !state.liveLayerMedia.isEmpty)
         case .overlays: !state.liveOverlays.isEmpty
-        case .audio: !state.liveAudio.isEmpty
+        case .audio: !state.liveAudio.isEmpty || tracks.isPlaying
         case .alerts: state.liveAlert != nil
-        case .signage: signage?.hasAnyChannelContent ?? false
         }
     }
 
@@ -1404,8 +1470,8 @@ final class ServiceControls {
         }
     }
 
-    var hasAnyClearableContent: Bool {
-        ShowFunction.allCases.contains { hasContent(function: $0) }
+    func hasClearAllContent(sweeping swept: Set<ShowFunction>) -> Bool {
+        ShowFunction.allCases.contains { swept.contains($0) && hasContent(function: $0) }
     }
 
     var liveSlideID: String? { state.liveSlide?.slide.id }
@@ -1486,12 +1552,25 @@ final class ServiceControls {
         slidePosition = context.slidePosition
         currentItemName = context.currentItemName
         nextItemName = context.nextItemName
+        cueTracksAhead()
+
+        timeline.refreshTransition()
         if state.hasLinkedText {
 
             apply()
         } else {
             pushConfidence()
         }
+    }
+
+    private func cueTracksAhead() {
+        guard TimelineTracks.hasTracks(appModel.trackChannels), let contextID = liveContextID, let serviceID = appModel.currentServiceID,
+              let service = try? appModel.service(serviceID) else { return }
+        let show = appModel.runOfShow(service).filter { $0.itemKind == .presentation }
+        guard let index = show.firstIndex(where: { $0.id == contextID }) else { return }
+        timeline.cueAhead(show[index...].prefix(2).compactMap { item in
+            appModel.presentation(item.refId).map { (item.id, $0, item.arrangementId) }
+        })
     }
 
     private struct ServicePosition {
@@ -1728,6 +1807,13 @@ final class ServiceControls {
     func setPreviewMediaWants(_ wants: [String: Bool?]) {
         if wants != previewMediaWants {
             previewMediaWants = wants
+            syncMedia()
+        }
+    }
+
+    private func reloadLiveMedia(_ id: String) {
+        if liveMediaIDs.contains(id) {
+            liveMediaIDs.remove(id)
             syncMedia()
         }
     }

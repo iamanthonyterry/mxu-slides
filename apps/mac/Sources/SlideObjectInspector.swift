@@ -12,6 +12,8 @@ struct SlideObjectInspector: View {
     @State private var showingFillMediaPicker = false
     @State private var showingLayerMediaPicker = false
 
+    @State private var showingArrangements = false
+
     @State private var selectedLineIndex = 0
 
     @State private var insetsExpanded = false
@@ -33,10 +35,25 @@ struct SlideObjectInspector: View {
     )
 
     enum Tab: String, CaseIterable {
-        case slide, object, animation
+        case presentation, slide, object, animation
     }
 
     @State private var tab: Tab = .object
+
+    private var tabOptions: [(Tab, String)] {
+        var options: [(Tab, String)] = []
+        if model.hasPresentationSettings {
+            options.append((.presentation, "Presentation"))
+        }
+        options.append((.slide, slideTabTitle))
+
+        options.append((.object, model.isMultiView ? "Tile" : "Object"))
+
+        if model.editorMode == .design, !model.isMultiView {
+            options.append((.animation, "Animation"))
+        }
+        return options
+    }
 
     private var slideTabTitle: String {
         if model.isThemeEditor { return "Category" }
@@ -48,23 +65,25 @@ struct SlideObjectInspector: View {
     var body: some View {
         let _ = BodyMeter.tick(.slideObjectInspector)
         VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                Text(slideTabTitle).tag(Tab.slide)
 
-                Text(model.isMultiView ? "Tile" : "Object").tag(Tab.object)
-
-                if model.editorMode == .design, !model.isMultiView {
-                    Text("Animation").tag(Tab.animation)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            ToolbarSegments(options: tabOptions, selection: $tab, fillsWidth: true)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
             switch tab {
+            case .presentation:
+                presentationInspector()
             case .slide:
-                cueInspector()
+                if model.currentSlide == nil {
+
+                    ContentUnavailableView(
+                        "No Slides", systemImage: "rectangle.on.rectangle",
+                        description: Text("Add a slide to edit its settings.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    cueInspector()
+                }
             case .object:
 
                 if model.isMultiView {
@@ -146,26 +165,11 @@ struct SlideObjectInspector: View {
     private func presentationCueSections() -> some View {
         InspectorSection("Slide") {
             InspectorTextField("Name", text: slideNameBinding())
+
             if !model.themeSlideNames.isEmpty || !model.otherThemeChoices.isEmpty {
-                InspectorPicker("Theme Slide", selection: themeSlideSelection()) {
-                    Text("Automatic").tag("")
-
-                    ForEach(Array(model.themeSlideGroups.enumerated()), id: \.offset) { _, group in
-                        if let folder = group.folder {
-                            Section(folder) {
-                                ForEach(group.names, id: \.self) { Text($0).tag($0) }
-                            }
-                        } else {
-                            ForEach(group.names, id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-
-                    ForEach(model.otherThemeChoices, id: \.theme.id) { choice in
-                        Section(choice.theme.name) {
-                            ForEach(choice.groups.flatMap(\.names), id: \.self) { name in
-                                Text(name).tag("\(choice.theme.id)|\(name)")
-                            }
-                        }
+                LabeledContent("Theme Slide") {
+                    ThemePickButton(title: themeSlideTitle, detail: themeSlideDetail) {
+                        model.choosingSlideTheme = true
                     }
                 }
             }
@@ -173,11 +177,11 @@ struct SlideObjectInspector: View {
         InspectorSection("Background") {
             if let background = model.effectiveBackground {
 
-                LabeledContent("Media") {
-                    HStack(spacing: 6) {
-                        Text(model.backgroundMediaName(background))
-                        editMediaButton(background.mediaId)
-                    }
+                MediaPickCard(
+                    model: model.appModel, mediaID: background.mediaId,
+                    scope: model.isThemeEditor ? replaceScope : "this background, where Applies To says"
+                ) {
+                    showingBackgroundPicker = true
                 }
                 InspectorPicker("Applies To", selection: backgroundScopeBinding()) {
                     ForEach(model.availableBackgroundScopes, id: \.self) { scope in
@@ -195,11 +199,7 @@ struct SlideObjectInspector: View {
                     }
                 }
                 Toggle("Loop", isOn: backgroundLoopBinding(background))
-                HStack {
-                    Button("Replace…") { showingBackgroundPicker = true }
-                    Spacer()
-                    Button("Remove", role: .destructive) { model.removeBackground() }
-                }
+                Button("Remove", role: .destructive) { model.removeBackground() }
             } else {
                 Text("No background: when presenting, the previous cue's background keeps playing.")
                     .font(.caption)
@@ -224,7 +224,6 @@ struct SlideObjectInspector: View {
                         }
                         Text(model.backgroundMediaName(cue))
                             .lineLimit(1)
-                        editMediaButton(cue.mediaId)
                     }
                 }
                 InspectorPicker("Layer", selection: Binding(
@@ -277,6 +276,70 @@ struct SlideObjectInspector: View {
             ActionListEditor(model: model.appModel, actions: slideActionsBinding())
         }
 
+        if !model.hasPresentationSettings {
+            presentationSettingsSection()
+        }
+    }
+
+    private func presentationInspector() -> some View {
+        InspectorForm {
+            InspectorSection("Theme") {
+                LabeledContent("Every Slide") {
+                    ThemePickButton(title: deckThemeTitle, detail: nil) {
+                        model.choosingDeckTheme = true
+                    }
+                }
+            }
+            InspectorSection("Background") {
+                PresentationBackgroundRows(model: model)
+                Text("A color drawn under every slide of this presentation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            InspectorSection("Arrangements") {
+                LabeledContent(arrangementsSummary) {
+                    Button("Edit\u{2026}") { showingArrangements = true }
+                        .popover(isPresented: $showingArrangements, arrowEdge: .leading) {
+                            ArrangementPopover(model: model)
+                        }
+                }
+                Text("Repeat a chorus without duplicating its slides, then pick the arrangement per service.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            presentationSettingsSection()
+        }
+    }
+
+    private var deckThemeTitle: String {
+        let id = model.presentation.themeId
+        return id.isEmpty ? "None" : model.appModel.entry(id)?.name ?? "Theme"
+    }
+
+    private var arrangementsSummary: String {
+        switch model.arrangements.count {
+        case 0: "Slide order only"
+        case 1: "1 arrangement"
+        default: "\(model.arrangements.count) arrangements"
+        }
+    }
+
+    private var themeSlideTitle: String {
+        if model.currentSlide?.unthemed == true {
+            "Blank"
+        } else {
+            model.currentSlide?.themeSlideName ?? "Automatic"
+        }
+    }
+
+    private var themeSlideDetail: String? {
+        let id = model.currentSlide.map { model.themeId(of: $0.id) } ?? ""
+        return model.currentSlide?.unthemed == true || id.isEmpty ? nil : model.appModel.entry(id)?.name
+    }
+
+    @ViewBuilder
+    private func presentationSettingsSection() -> some View {
+
         InspectorSection("Presentation") {
             InspectorPicker("Resolution", selection: canvasSelectionBinding()) {
                 ForEach(Self.canvasPresets, id: \.label) { preset in
@@ -295,17 +358,8 @@ struct SlideObjectInspector: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            InspectorPicker("Key", selection: musicKeyBinding()) {
-                Text("None").tag("")
-                Divider()
-                ForEach(Self.keyNames, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-                ForEach(Self.keyNames, id: \.self) { name in
-                    Text(name + "m").tag(name + "m")
-                }
-            }
             if let musicKey = model.presentation.musicKey {
+                musicKeyPicker
                 InspectorPicker("Display Key", selection: displayKeyBinding(musicKey: musicKey)) {
                     ForEach(ChordMath.keyChoices(matching: musicKey), id: \.self) { name in
                         if name.caseInsensitiveCompare(musicKey) == .orderedSame {
@@ -316,6 +370,21 @@ struct SlideObjectInspector: View {
                     }
                 }
                 .help("Chords transpose to this key on every screen that shows them")
+            } else if ChordMath.hasChords(in: model.presentation) {
+                musicKeyPicker
+            }
+        }
+    }
+
+    private var musicKeyPicker: some View {
+        InspectorPicker("Key", selection: musicKeyBinding()) {
+            Text("None").tag("")
+            Divider()
+            ForEach(Self.keyNames, id: \.self) { name in
+                Text(name).tag(name)
+            }
+            ForEach(Self.keyNames, id: \.self) { name in
+                Text(name + "m").tag(name + "m")
             }
         }
     }
@@ -336,13 +405,7 @@ struct SlideObjectInspector: View {
         )
     }
 
-    private static let canvasPresets: [(label: String, width: Int, height: Int)] = [
-        ("1080p (1920×1080)", 1920, 1080),
-        ("4K UHD (3840×2160)", 3840, 2160),
-        ("720p (1280×720)", 1280, 720),
-        ("Vertical (1080×1920)", 1080, 1920),
-        ("Square (1080×1080)", 1080, 1080),
-    ]
+    private static let canvasPresets = SlideSceneBuilder.canvasPresets
 
     private var canvasIsCustom: Bool {
         if canvasCustomChosen { return true }
@@ -394,30 +457,6 @@ struct SlideObjectInspector: View {
         Binding(
             get: { model.currentSlide?.name ?? "" },
             set: { model.renameCurrentSlide($0) }
-        )
-    }
-
-    private func themeSlideSelection() -> Binding<String> {
-        Binding(
-            get: {
-                guard let slide = model.currentSlide else { return "" }
-                let name = slide.themeSlideName ?? ""
-                if let own = slide.themeId, !own.isEmpty { return "\(own)|\(name)" }
-                return name
-            },
-            set: { value in
-                guard let slideID = model.currentSlide?.id else { return }
-                if let bar = value.firstIndex(of: "|") {
-                    let themeId = String(value[..<bar])
-                    let name = String(value[value.index(after: bar)...])
-                    model.setThemeSlide(name.isEmpty ? nil : name, themeId: themeId, for: slideID)
-                } else if model.currentSlide?.themeId?.isEmpty == false {
-
-                    model.setThemeSlide(value.isEmpty ? nil : value, themeId: model.presentation.themeId, for: slideID)
-                } else {
-                    model.setThemeSlide(value.isEmpty ? nil : value, for: slideID)
-                }
-            }
         )
     }
 
@@ -763,14 +802,15 @@ struct SlideObjectInspector: View {
             BoundedSliderRow(
                 label: "Duration",
                 value: Binding(
-                    get: { model.currentSlide?.transition?.durationSeconds ?? 0.5 },
+                    get: { TransitionEdit.seconds(model.currentSlide?.transition) },
                     set: { seconds in
                         var updated = transition
                         updated.durationSeconds = seconds
                         model.setSlideTransition(updated)
                     }
                 ),
-                range: 0 ... 5, step: 0.05
+                range: TransitionEdit.durationRange, step: TransitionEdit.durationStep,
+                typedRange: TransitionEdit.typedRange
             )
             if transition.transitionKind == .fadeColor {
                 HexColorRow(
@@ -786,7 +826,7 @@ struct SlideObjectInspector: View {
                 )
             }
         }
-        Text("Room Default follows Settings › Transitions when this slide fires.")
+        Text("Room Default follows Settings › Present › Slide transition when this slide fires.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -2093,6 +2133,12 @@ struct SlideObjectInspector: View {
 
     private func fillSection(_ object: SlideObject) -> some View {
         InspectorSection(fillIsMediaKind(object) ? "Media" : "Fill") {
+            if fillIsMediaKind(object), fillIsLibrary(object),
+               let mediaID = current(object).fill?.mediaId, !mediaID.isEmpty {
+                MediaPickCard(model: model.appModel, mediaID: mediaID, scope: replaceScope) {
+                    showingFillMediaPicker = true
+                }
+            }
             InspectorPicker("Fill", selection: fillKindBinding(object)) {
                 Text("None").tag(FillKind.none)
                 Text("Solid").tag(FillKind.solid)
@@ -2133,16 +2179,6 @@ struct SlideObjectInspector: View {
                         }
                     }
                 }
-                if fillIsLibrary(object) {
-                    LabeledContent("Item") {
-                        HStack(spacing: 6) {
-                            Text(fillMediaName(object))
-                            if let mediaID = current(object).fill?.mediaId, !mediaID.isEmpty {
-                                editMediaButton(mediaID)
-                            }
-                        }
-                    }
-                }
                 InspectorPicker("Scale", selection: fillWrite(object, \.mediaScaleMode, default: .fill)) {
                     Text("Fill").tag(MediaScaleMode.fill)
                     Text("Fit").tag(MediaScaleMode.fit)
@@ -2160,10 +2196,9 @@ struct SlideObjectInspector: View {
                             }
                         }
                     ))
-                    Button(current(object).fill?.mediaId?.isEmpty == false ? "Replace…" : "Choose…") {
-                        showingFillMediaPicker = true
-                    }
-                    if current(object).fill?.mediaId?.isEmpty == false {
+                    if current(object).fill?.mediaId?.isEmpty != false {
+                        Button("Choose…") { showingFillMediaPicker = true }
+                    } else {
 
                         Button("Remove") {
                             commit(object) {
@@ -2191,21 +2226,8 @@ struct SlideObjectInspector: View {
         }
     }
 
-    private func fillMediaName(_ object: SlideObject) -> String {
-        guard let mediaID = current(object).fill?.mediaId, !mediaID.isEmpty else { return "None" }
-        return model.appModel.indexEntry(mediaID)?.name ?? "Missing item"
-    }
-
-    private func editMediaButton(_ mediaID: String) -> some View {
-        Button {
-            model.appModel.openInEditor(entryID: mediaID)
-        } label: {
-            Image(systemName: "pencil")
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .help("Edit Media")
+    private var replaceScope: String {
+        model.isThemeEditor ? "this design (every slide that uses it)" : "this object"
     }
 
     private func fillIsLibrary(_ object: SlideObject) -> Bool {
@@ -2940,6 +2962,7 @@ extension TextSourceKind {
         case .currentGroup: "Group Name"
         case .currentPresentation: "Presentation Name"
         case .nextServiceTitle: "Next Service Title"
+        case .timecode: "Timecode"
         }
     }
 }

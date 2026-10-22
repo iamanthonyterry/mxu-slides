@@ -245,14 +245,7 @@ struct PreviewTargetMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .disabled(screens.isEmpty && layouts.isEmpty)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle.standard(CornerStandard.element)
-        )
-        .overlay(
-            RoundedRectangle.standard(CornerStandard.element)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-        )
+        .headerItemBackground()
         .help("Which screen or layout this preview shows — every screen composites its own view via the active preset")
     }
 }

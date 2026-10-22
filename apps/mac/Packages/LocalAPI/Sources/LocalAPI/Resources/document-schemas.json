@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 135,
+  "schemaVersion": 150,
   "schemas": {
     "SlideObjectKind": {
       "type": "string",
@@ -1287,28 +1287,80 @@
     "TimelineCue": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        },
+        "at": {
+          "type": "number"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "sectionId": {
+          "type": "string"
+        },
+        "sectionOccurrence": {
+          "type": "integer"
+        },
         "slideId": {
           "type": "string"
         },
-        "timeSeconds": {
+        "mediaId": {
+          "type": "string"
+        },
+        "overlayId": {
+          "type": "string"
+        },
+        "alertId": {
+          "type": "string"
+        },
+        "liveInputId": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SlideAction"
+          }
+        },
+        "inPoint": {
           "type": "number"
         },
-        "name": {
-          "type": "string"
+        "fadeIn": {
+          "$ref": "#/components/schemas/ClipFade"
+        },
+        "fadeOut": {
+          "$ref": "#/components/schemas/ClipFade"
+        },
+        "edgeFades": {
+          "type": "boolean"
         }
       },
       "required": [
-        "slideId",
-        "timeSeconds"
+        "id",
+        "lane",
+        "at"
       ]
     },
     "PresentationTimeline": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "arrangementId": {
+          "type": "string"
+        },
         "timecodeEnabled": {
           "type": "boolean"
         },
-        "offsetSeconds": {
+        "timecodeStart": {
+          "type": "integer"
+        },
+        "length": {
           "type": "number"
         },
         "cues": {
@@ -1317,13 +1369,17 @@
             "$ref": "#/components/schemas/TimelineCue"
           }
         },
-        "durationSeconds": {
-          "type": "number"
+        "mapLayout": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SongMapBlock"
+          }
         }
       },
       "required": [
+        "id",
         "timecodeEnabled",
-        "offsetSeconds",
+        "timecodeStart",
         "cues"
       ]
     },
@@ -1433,6 +1489,101 @@
         "deck"
       ]
     },
+    "ClipFade": {
+      "type": "object",
+      "properties": {
+        "seconds": {
+          "type": "number"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "midpoint": {
+          "type": "number"
+        },
+        "placement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "seconds"
+      ]
+    },
+    "SongMap": {
+      "type": "object",
+      "properties": {
+        "recording": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TimelineCue"
+          }
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AudioSection"
+          }
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recording",
+        "sections"
+      ]
+    },
+    "AudioSection": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "start": {
+          "type": "number"
+        },
+        "sectionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "start"
+      ]
+    },
+    "SongMapBlock": {
+      "type": "object",
+      "properties": {
+        "sectionId": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer"
+        },
+        "start": {
+          "type": "number"
+        },
+        "length": {
+          "type": "number"
+        },
+        "audioSectionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "occurrence",
+        "start",
+        "length",
+        "audioSectionIds"
+      ]
+    },
     "Presentation": {
       "type": "object",
       "properties": {
@@ -1502,14 +1653,23 @@
         "autoAdvance": {
           "$ref": "#/components/schemas/AutoAdvance"
         },
+        "transition": {
+          "$ref": "#/components/schemas/Transition"
+        },
         "displayKey": {
           "type": "string"
         },
         "origin": {
           "$ref": "#/components/schemas/PresentationOrigin"
         },
-        "timeline": {
-          "$ref": "#/components/schemas/PresentationTimeline"
+        "timelines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/PresentationTimeline"
+          }
+        },
+        "songMap": {
+          "$ref": "#/components/schemas/SongMap"
         }
       },
       "required": [
@@ -1624,6 +1784,9 @@
         "recordedAt": {
           "type": "number"
         },
+        "importedAt": {
+          "type": "number"
+        },
         "recordedByPresetId": {
           "type": "string"
         },
@@ -1722,9 +1885,6 @@
         },
         "refId": {
           "type": "string"
-        },
-        "autoAdvanceDelaySeconds": {
-          "type": "number"
         }
       },
       "required": [
@@ -1773,12 +1933,6 @@
           "type": "boolean"
         },
         "crossfadeSeconds": {
-          "type": "number"
-        },
-        "autoAdvance": {
-          "type": "boolean"
-        },
-        "autoAdvanceDelaySeconds": {
           "type": "number"
         }
       },
@@ -1904,6 +2058,9 @@
         },
         "mxuSongKeyApplied": {
           "type": "string"
+        },
+        "transition": {
+          "$ref": "#/components/schemas/SongTransition"
         }
       },
       "required": [
@@ -1911,6 +2068,20 @@
         "itemKind",
         "name",
         "refId"
+      ]
+    },
+    "SongTransition": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind"
       ]
     },
     "ServiceLinkRule": {
@@ -2158,6 +2329,9 @@
           "items": {
             "$ref": "#/components/schemas/ServiceVersion"
           }
+        },
+        "timecodeByOrder": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -2705,7 +2879,8 @@
       "type": "string",
       "enum": [
         "camera",
-        "ndi"
+        "ndi",
+        "decklink"
       ]
     },
     "SlideActionKind": {
@@ -2856,12 +3031,6 @@
         },
         "audioRepeat": {
           "type": "boolean"
-        },
-        "signageId": {
-          "type": "string"
-        },
-        "screenId": {
-          "type": "string"
         },
         "delaySeconds": {
           "type": "number"
@@ -3342,7 +3511,8 @@
         "stageMessage",
         "currentGroup",
         "currentPresentation",
-        "nextServiceTitle"
+        "nextServiceTitle",
+        "timecode"
       ]
     },
     "TimerTextFormat": {
@@ -3538,42 +3708,6 @@
         "id",
         "name",
         "objects"
-      ]
-    },
-    "SignageChannel": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "playlistId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "name"
-      ]
-    },
-    "SignageBoard": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "signages": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/SignageChannel"
-          }
-        }
-      },
-      "required": [
-        "id",
-        "signages"
       ]
     },
     "NoteRun": {
@@ -4137,9 +4271,6 @@
         "confidence": {
           "type": "string"
         },
-        "signage": {
-          "type": "string"
-        },
         "inputs": {
           "type": "string"
         },
@@ -4149,6 +4280,103 @@
       },
       "required": [
         "id"
+      ]
+    },
+    "TrackChannel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "colorHex": {
+          "type": "string"
+        },
+        "matchNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mono": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "TrackChannelList": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TrackChannel"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "channels"
+      ]
+    },
+    "TrackSetStem": {
+      "type": "object",
+      "properties": {
+        "audioId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "audioId",
+        "name"
+      ]
+    },
+    "TrackSet": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "stems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TrackSetStem"
+          }
+        },
+        "key": {
+          "type": "string"
+        },
+        "tempo": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "stems"
       ]
     }
   }

@@ -3,7 +3,6 @@ import SwiftUI
 enum ServiceControlsModule: String, Codable, CaseIterable, Sendable {
     case audio
     case mixer
-    case media
     case timers
     case values
 
@@ -15,17 +14,17 @@ enum ServiceControlsModule: String, Codable, CaseIterable, Sendable {
 
     case outputs
 
+    case timecode
+
     static let defaultOrder: [ServiceControlsModule] = [
         .combos, .timers, .values, .tracking, .overlays, .audio, .alerts,
-        .mixer, .media, .confidence, .outputs,
+        .mixer, .confidence, .outputs, .timecode,
     ]
 
     var title: String {
         switch self {
         case .audio: "Music"
         case .mixer: "Mixer"
-
-        case .media: "Signage"
         case .timers: "Timers"
         case .values: "Values"
         case .tracking: "Service Tracking"
@@ -34,6 +33,7 @@ enum ServiceControlsModule: String, Codable, CaseIterable, Sendable {
         case .combos: "Combos"
         case .confidence: "Confidence Monitor"
         case .outputs: "Outputs"
+        case .timecode: "Timecode"
         }
     }
 
@@ -41,7 +41,6 @@ enum ServiceControlsModule: String, Codable, CaseIterable, Sendable {
         switch self {
         case .audio: .audio
         case .mixer: .mixer
-        case .media: .media
         case .timers: .timers
         case .values: .notes
         case .tracking: .timers
@@ -50,6 +49,7 @@ enum ServiceControlsModule: String, Codable, CaseIterable, Sendable {
         case .combos: .combos
         case .confidence: .confidence
         case .outputs: .screens
+        case .timecode: .timers
         }
     }
 }
